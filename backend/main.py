@@ -21,7 +21,9 @@ from backend.api.routes.events import router as events_router
 from backend.api.routes.model_settings import router as model_router
 from backend.api.routes.privacy import router as privacy_router
 from backend.api.routes.tracking import router as tracking_router
+from backend.api.routes.browsers import router as browsers_router
 from backend.collectors.filesystem import filesystem_collector
+from backend.collectors.browser_history import browser_collector
 from backend.database.db import init_db
 from backend.harness.providers import provider_registry
 from backend.privacy.controller import privacy_controller
@@ -60,13 +62,20 @@ async def lifespan(app: FastAPI):
         stop_fn=filesystem_collector.stop,
         status_fn=filesystem_collector.status,
     )
+    privacy_controller.register_collector(
+        "browser",
+        stop_fn=browser_collector.stop,
+        status_fn=browser_collector.status,
+    )
     filesystem_collector.start()
-    logger.info("Filesystem collector initialised.")
+    browser_collector.start()
+    logger.info("Collectors initialised.")
 
     yield
 
-    # Shutdown — stop the collector cleanly.
+    # Shutdown — stop collectors cleanly.
     filesystem_collector.stop()
+    browser_collector.stop()
     logger.info("TrailBack shutting down.")
 
 
@@ -92,6 +101,7 @@ app.include_router(privacy_router)
 app.include_router(model_router)
 app.include_router(ask_router)
 app.include_router(tracking_router)
+app.include_router(browsers_router)
 
 
 @app.get("/api/dev-token")

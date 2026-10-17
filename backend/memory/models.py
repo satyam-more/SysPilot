@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 
 class EventCreate(BaseModel):
-    source: Literal["filesystem", "terminal", "shell"]
+    source: Literal["filesystem", "terminal", "shell", "browser"]
     event_type: str = Field(min_length=1, max_length=64)
     evidence_type: Literal["observed", "inferred"] = "observed"
     file_path: Optional[str] = None

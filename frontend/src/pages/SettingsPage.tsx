@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { modelAPI, privacyAPI, trackingAPI } from "../api/client";
-import type { ModelStatus, TrackingStatus } from "../api/client";
+import { modelAPI, privacyAPI, trackingAPI, browsersAPI } from "../api/client";
+import type {
+  ModelStatus,
+  TrackingStatus,
+  BrowserStatus,
+} from "../api/client";
 
 // Models available per provider. Keep in sync with SUPPORTED_PROVIDERS
 // in backend/harness/providers/provider_registry.py.
@@ -43,8 +47,143 @@ export default function SettingsPage() {
       <ModelModeSection status={status} onUpdate={fetchStatus} />
       <ApiKeySection status={status} onUpdate={fetchStatus} />
       <TrackingSection />
+      <BrowsersSection />
       <PrivacySection />
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Browser History Tracking
+// ---------------------------------------------------------------------------
+
+function BrowsersSection() {
+  const [status, setStatus] = useState<BrowserStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [domainsText, setDomainsText] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  const refresh = async () => {
+    try {
+      const resp = await browsersAPI.getStatus();
+      setStatus(resp.data);
+      setDomainsText(resp.data.excluded_domains.join("\n"));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const toggleBrowser = async (name: string, enable: boolean) => {
+    if (!status) return;
+    const current = status.browsers.filter((b) => b.enabled).map((b) => b.name);
+    const next = enable
+      ? [...current, name]
+      : current.filter((n) => n !== name);
+    setBusy(true);
+    try {
+      await browsersAPI.setEnabled(next);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveDomains = async () => {
+    setBusy(true);
+    setSaved(false);
+    try {
+      const domains = domainsText
+        .split("\n")
+        .map((d) => d.trim())
+        .filter(Boolean);
+      await browsersAPI.setExcludedDomains(domains);
+      setSaved(true);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const browsers = status?.browsers ?? [];
+  const running = status?.collector === "running";
+
+  return (
+    <div className="card">
+      <h2>Browser History</h2>
+      <p style={{ marginBottom: 12, color: "var(--text-muted)" }}>
+        TrailBack can read your browser history to remember pages you visited.
+        Nothing is sent anywhere — it reads the local history file only for
+        browsers you enable below.
+      </p>
+
+      {browsers.length === 0 ? (
+        <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
+          No supported browsers detected on this machine.
+        </p>
+      ) : (
+        <>
+          <div style={{ marginBottom: 14 }}>
+            {browsers.map((b) => (
+              <label
+                key={b.name}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 0",
+                  borderBottom: "1px solid var(--border)",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={b.enabled}
+                  disabled={busy}
+                  onChange={(e) => toggleBrowser(b.name, e.target.checked)}
+                  style={{ width: "auto" }}
+                />
+                <span>{b.name}</span>
+                {b.enabled && running && (
+                  <span className="status-badge online" style={{ marginLeft: "auto" }}>
+                    <span className="status-dot" />
+                    Tracking
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
+
+          <div className="form-row">
+            <label>Excluded domains (one per line — never recorded)</label>
+            <textarea
+              value={domainsText}
+              onChange={(e) => {
+                setDomainsText(e.target.value);
+                setSaved(false);
+              }}
+              rows={4}
+              placeholder="mail.google.com&#10;web.whatsapp.com"
+              style={{ fontFamily: "var(--mono)", fontSize: 13 }}
+            />
+          </div>
+          <div className="form-actions">
+            <button className="btn-primary" disabled={busy} onClick={saveDomains}>
+              Save exclusions
+            </button>
+            {saved && (
+              <span style={{ color: "var(--success)", fontSize: 13, alignSelf: "center" }}>
+                Saved
+              </span>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

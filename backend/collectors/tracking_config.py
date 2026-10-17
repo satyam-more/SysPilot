@@ -76,6 +76,14 @@ def _set_setting(key: str, value: list[str]) -> None:
         )
 
 
+# Browser domains excluded by default (private/sensitive). Users can edit.
+_DEFAULT_EXCLUDED_DOMAINS = [
+    "mail.google.com",
+    "web.whatsapp.com",
+    "accounts.google.com",
+]
+
+
 def get_excluded_folders() -> list[str]:
     return _get_setting("excluded_folders", _DEFAULT_EXCLUDED_FOLDERS)
 
@@ -90,3 +98,33 @@ def set_excluded_folders(folders: list[str]) -> None:
 
 def set_excluded_extensions(exts: list[str]) -> None:
     _set_setting("excluded_extensions", exts)
+
+
+# --- Browser tracking config -----------------------------------------------
+
+def get_excluded_domains() -> list[str]:
+    return _get_setting("excluded_domains", _DEFAULT_EXCLUDED_DOMAINS)
+
+
+def set_excluded_domains(domains: list[str]) -> None:
+    _set_setting("excluded_domains", domains)
+
+
+def get_enabled_browser_names() -> list[str]:
+    """Names of browsers the user has turned on for tracking."""
+    return _get_setting("enabled_browsers", [])
+
+
+def set_enabled_browser_names(names: list[str]) -> None:
+    _set_setting("enabled_browsers", names)
+
+
+def list_enabled_browsers() -> list[dict]:
+    """
+    Resolve enabled browser names to full {name, path, kind} dicts by matching
+    against currently detected browsers. Only returns ones still present.
+    """
+    from backend.collectors.browser_history import detect_browsers
+
+    enabled = set(get_enabled_browser_names())
+    return [b for b in detect_browsers() if b["name"] in enabled]

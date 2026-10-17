@@ -33,9 +33,11 @@ def resume(
 ) -> dict:
     """Resume normal recording and restart collectors that were stopped."""
     privacy_controller.deactivate_privacy()
-    # Restart the filesystem collector (it was stopped on pause).
+    # Restart collectors that were stopped on pause.
     from backend.collectors.filesystem import filesystem_collector
+    from backend.collectors.browser_history import browser_collector
     filesystem_collector.start()
+    browser_collector.start()
     return {"state": "active"}
 
 

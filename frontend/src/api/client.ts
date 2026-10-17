@@ -167,4 +167,33 @@ export const trackingAPI = {
   stop: () => api.post("/api/tracking/stop"),
 };
 
+export interface BrowserInfo {
+  name: string;
+  path: string;
+  kind: "chromium" | "firefox";
+  enabled: boolean;
+}
+
+export interface BrowserStatus {
+  collector: "running" | "stopped";
+  browsers: BrowserInfo[];
+  excluded_domains: string[];
+}
+
+export const browsersAPI = {
+  getStatus: () => api.get<BrowserStatus>("/api/browsers/status"),
+  setEnabled: (names: string[]) =>
+    api.post<{ status: string; enabled: string[]; collector: string }>(
+      "/api/browsers/enabled",
+      { names }
+    ),
+  setExcludedDomains: (domains: string[]) =>
+    api.post<{ status: string; excluded_domains: string[] }>(
+      "/api/browsers/excluded-domains",
+      { domains }
+    ),
+  start: () => api.post("/api/browsers/start"),
+  stop: () => api.post("/api/browsers/stop"),
+};
+
 export default api;
