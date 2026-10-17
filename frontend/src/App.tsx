@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import SettingsPage from "./pages/SettingsPage";
+import AskPage from "./pages/AskPage";
 
 type Page = "settings" | "ask" | "timeline";
 
@@ -46,7 +47,7 @@ export default function App() {
       </div>
 
       {page === "settings" && <SettingsPage />}
-      {page === "ask" && <div className="card"><h2>Ask — coming in Phase 10</h2></div>}
+      {page === "ask" && <AskPage />}
       {page === "timeline" && <div className="card"><h2>Timeline — coming in Phase 10</h2></div>}
     </div>
   );
