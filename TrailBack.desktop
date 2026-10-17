@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=TrailBack
+Comment=Local AI memory assistant
+Exec=/home/satyam-more/Trailback/launch.sh
+Path=/home/satyam-more/Trailback
+Icon=applications-science
+Terminal=true
+Categories=Utility;Development;
