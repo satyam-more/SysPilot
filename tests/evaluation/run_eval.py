@@ -104,7 +104,10 @@ async def run_all(out_path: Path, provider_label: str) -> dict:
     model_name = provider.get_active_model()
 
     results: list[EvalResult] = []
-    for case in EVAL_CASES:
+    for i, case in enumerate(EVAL_CASES):
+        if i > 0:
+            # Space out requests to stay under free-tier rate limits.
+            await asyncio.sleep(15)
         print(f"\n=== Case {case.id}: {case.query}")
         res = await _run_one(case, model_name)
         status = "PASS" if res.correct else "FAIL"
@@ -142,23 +145,39 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # 1. Read the REAL saved provider config (which provider/model/key_ref)
+    #    from the user's actual DB before we switch to a temp DB for events.
+    import backend.database.db as db_mod
+    from backend.harness.providers import provider_registry
+
+    db_mod._conn = None
+    db_mod.init_db()  # opens the real ~/.config/trailback DB
+    provider_registry._load_config()
+    saved_provider = provider_registry._api_config.get("provider", "openai")
+    saved_model = provider_registry._api_config.get("model", "")
+    saved_key_ref = provider_registry._api_config.get("key_ref", "")
+
+    # 2. Seed a fresh temp DB with synthetic events (isolates the eval data).
     with tempfile.TemporaryDirectory() as tmp:
         _seed_database(Path(tmp))
-
-        # Force the requested provider mode for this eval run.
-        from backend.harness.providers import provider_registry
 
         if args.provider == "api":
             from backend.security.keystore import key_is_configured
 
-            if not key_is_configured("openai"):
+            if not (saved_key_ref and key_is_configured(saved_provider)):
                 print(
-                    "ERROR: API mode requested but no OpenAI key is configured.\n"
-                    "Add your key first via the Settings UI (or POST /api/model/api-key),\n"
-                    "then re-run this evaluation."
+                    "ERROR: API mode requested but no API key is configured.\n"
+                    "Add your key first via the Settings UI, then re-run."
                 )
                 return
+            # Restore the real provider config (temp-DB seeding reset it).
+            provider_registry._api_config = {
+                "provider": saved_provider,
+                "model": saved_model or "llama-3.3-70b-versatile",
+                "key_ref": saved_key_ref,
+            }
             provider_registry._current_mode = "api"
+            print(f"Evaluating provider={saved_provider} model={provider_registry._api_config['model']}")
         else:
             provider_registry._current_mode = "offline"
 

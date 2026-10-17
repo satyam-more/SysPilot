@@ -72,11 +72,27 @@ UNCERTAINTY_MARKERS = [
     "not sure",
     "unclear",
     "cannot confirm",
+    "can't confirm",
+    "can't tell",
+    "cannot tell",
     "no record",
     "nothing recorded",
     "don't have",
     "do not have",
     "no evidence",
+    "couldn't find",
+    "could not find",
+    "couldn't",
+    "didn't find",
+    "did not find",
+    "no activity",
+    "nothing in",
+    "not find any",
+    "not seeing any",
+    "no recent activity",
+    "don't see any",
+    "do not see any",
+    "no file edits",
 ]
 
 
@@ -86,15 +102,37 @@ def score_case(case: EvalCase, answer: str, evidence: list[dict]) -> tuple[bool,
 
     Returns (correct, evidence_correct, hallucination_free, notes).
     """
-    answer_lower = answer.lower()
+    # Normalise curly apostrophes/quotes to straight ones so marker matching
+    # works regardless of the model's typography.
+    answer_lower = (
+        answer.lower()
+        .replace("\u2019", "'")
+        .replace("\u2018", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+    )
     notes_parts: list[str] = []
 
     # 1. Hallucination check — must not contain forbidden claims.
+    # A forbidden phrase is OK if it appears inside a negation/hedge, e.g.
+    # "I can't confirm whether you fully mastered it" is correct behavior.
+    _NEGATION_CONTEXT = [
+        "can't confirm", "cannot confirm", "can not confirm", "cannot say",
+        "no evidence", "don't", "do not", "not able to", "unable to",
+        "whether you", "if you", "can't tell", "cannot tell", "no record",
+    ]
     hallucination_free = True
     for forbidden in case.must_not_claim:
-        if forbidden.lower() in answer_lower:
-            hallucination_free = False
-            notes_parts.append(f"contains forbidden claim: {forbidden!r}")
+        fl = forbidden.lower()
+        if fl not in answer_lower:
+            continue
+        # Check whether the forbidden phrase is inside a negation context.
+        pos = answer_lower.find(fl)
+        window = answer_lower[max(0, pos - 60):pos + len(fl)]
+        if any(neg in window for neg in _NEGATION_CONTEXT):
+            continue  # negated/hedged — acceptable
+        hallucination_free = False
+        notes_parts.append(f"contains forbidden claim: {forbidden!r}")
 
     # 2. Evidence check.
     evidence_blob = " ".join(

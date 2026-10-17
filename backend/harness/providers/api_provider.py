@@ -100,23 +100,54 @@ class APIProvider(ModelProvider):
         if not self._key_ref:
             raise InvalidAPIKeyError("No API key configured")
         key = get_key(self._key_ref)
+        payload = self._build_request(messages, tools, max_tokens)
+
+        # Retry transient failures (429 rate limit, 5xx, and the sporadic 400
+        # the Groq free tier returns under load) with short exponential backoff.
+        import asyncio
+
+        last_exc: Exception | None = None
         try:
             async with httpx.AsyncClient(
                 base_url=base_url,
                 follow_redirects=False,
                 timeout=httpx.Timeout(30.0),
             ) as client:
-                response = await client.post(
-                    "/chat/completions",
-                    headers={"Authorization": f"Bearer {key}"},
-                    json=self._build_request(messages, tools, max_tokens),
-                )
-        except httpx.TimeoutException as exc:
-            raise ModelTimeoutError("Provider request timed out") from exc
+                for attempt in range(3):
+                    try:
+                        response = await client.post(
+                            "/chat/completions",
+                            headers={"Authorization": f"Bearer {key}"},
+                            json=payload,
+                        )
+                    except httpx.TimeoutException as exc:
+                        last_exc = ModelTimeoutError("Provider request timed out")
+                        await asyncio.sleep(0.5 * (attempt + 1))
+                        continue
+
+                    # Retry on transient status codes.
+                    if response.status_code in (400, 429, 500, 502, 503, 529):
+                        last_exc = ProviderUnavailableError(
+                            f"Transient provider error {response.status_code}"
+                        )
+                        # Rate limits need a longer wait; honor Retry-After if sent.
+                        if response.status_code == 429:
+                            retry_after = response.headers.get("retry-after")
+                            delay = float(retry_after) if retry_after and retry_after.isdigit() else 4.0 * (attempt + 1)
+                        else:
+                            delay = 0.8 * (attempt + 1)
+                        await asyncio.sleep(delay)
+                        continue
+
+                    # Non-transient — parse and return (may raise on 401 etc).
+                    return self._parse_response(response)
         finally:
             del key  # Remove local reference immediately
 
-        return self._parse_response(response)
+        # Exhausted retries.
+        if last_exc:
+            raise last_exc
+        raise ProviderUnavailableError("Provider request failed")
 
     def _build_request(
         self,

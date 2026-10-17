@@ -39,11 +39,15 @@ Your job:
 5. Cite the specific events that support your answer (file names, commands, timestamps).
 6. When the search returns events, USE them — summarise what they show. Do not
    say "no events found" if the tool returned results.
-7. NEVER claim the user "mastered", "fully understood", "completed", or
-   "finished" anything. Activity events only show what was touched or run,
-   never the user's level of understanding. If asked whether they mastered or
-   finished something, say you cannot confirm mastery from the activity log —
-   you can only see what files and commands they worked with.
+7. NEVER use the words "mastered", "fully mastered", "fully understood",
+   "completed", or "finished" about the user's learning. Activity events only
+   show what files were touched or commands run — they say NOTHING about the
+   user's level of understanding or mastery. If asked whether they mastered or
+   finished something, you MUST begin your answer with a clear hedge such as
+   "I can't confirm mastery from the activity log" and then describe only what
+   the events show. Example: for "Did I master ownership?" answer "I can't
+   confirm whether you mastered it — the log only shows you edited Rust_Notes
+   with an ownership section and ran cargo a few times."
 
 Available tools:
 {tool_list}
@@ -70,31 +74,86 @@ async def _call_model(messages: list[dict]) -> str:
     offline (Ollama) and API mode.
     """
     provider = provider_registry.get_active_provider()
-    response = await provider.generate(messages=messages, max_tokens=1024)
+    # Larger budget: reasoning models (e.g. gpt-oss) spend tokens on an
+    # internal reasoning field before producing content.
+    response = await provider.generate(messages=messages, max_tokens=2048)
 
     # Ollama returns {"message": {"content": "..."}}
-    # OpenAI returns {"choices": [{"message": {"content": "..."}}]}
-    if "message" in response and "content" in response["message"]:
-        return response["message"]["content"]
-    if "choices" in response and len(response["choices"]) > 0:
-        return response["choices"][0]["message"]["content"]
+    # OpenAI / Groq return {"choices": [{"message": {"content": "...", "reasoning": "..."}}]}
+    msg: dict = {}
+    if "message" in response and isinstance(response["message"], dict):
+        msg = response["message"]
+    elif "choices" in response and response["choices"]:
+        msg = response["choices"][0].get("message", {})
+
+    content = (msg.get("content") or "").strip()
+    if content:
+        return content
+    # Reasoning-model fallback: some Groq models (gpt-oss) leave content empty
+    # and put the usable text in "reasoning". Use it so the loop still gets an
+    # answer instead of exiting with an empty response.
+    reasoning = (msg.get("reasoning") or "").strip()
+    if reasoning:
+        return reasoning
     return response.get("content", "")
 
 
 def _try_parse_tool_call(text: str) -> dict | None:
     """
     Attempt to parse a tool call JSON from the model output.
-    Returns the parsed dict if valid, None if it's a plain text answer.
+
+    Handles three shapes:
+      1. The whole text is a JSON object: {"tool": ..., "input": ...}
+      2. The text is wrapped in a ```json ... ``` markdown fence.
+      3. Reasoning models (gpt-oss) emit prose followed by the JSON object,
+         e.g.  'Let me search... {"tool": "search_events", "input": {...}}'.
+         We scan for the LAST balanced {...} block containing a "tool" key.
+    Returns the parsed dict if a valid tool call is found, else None.
     """
     text = text.strip()
-    if not text.startswith("{"):
-        return None
+
+    # Strip a markdown code fence if present.
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+
+    # Fast path: the whole thing is JSON.
+    candidate = text
+    if not candidate.startswith("{"):
+        # Find an embedded object by scanning for '{"tool"' or '{ "tool"'.
+        idx = text.rfind('{"tool"')
+        if idx == -1:
+            idx = text.rfind("{'tool'")
+        if idx == -1:
+            # Also try the first '{' that leads to a balanced object with "tool".
+            idx = text.find("{")
+        if idx == -1:
+            return None
+        candidate = text[idx:]
+
+    # Trim to a balanced {...} span so trailing prose doesn't break json.loads.
+    depth = 0
+    end = -1
+    for i, ch in enumerate(candidate):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end != -1:
+        candidate = candidate[:end]
+
     try:
-        parsed = json.loads(text)
-        if "tool" in parsed and "input" in parsed:
-            return parsed
+        parsed = json.loads(candidate)
     except (json.JSONDecodeError, ValueError):
-        pass
+        return None
+
+    if isinstance(parsed, dict) and "tool" in parsed and "input" in parsed:
+        return parsed
     return None
 
 
@@ -202,8 +261,14 @@ async def run_agent_loop(
             "result_preview": tool_result_str[:500],
         })
 
-        # Add the exchange to the conversation
-        messages.append({"role": "assistant", "content": model_response})
+        # Add the exchange to the conversation. Use a clean, compact assistant
+        # message (the parsed tool call) rather than the raw reasoning blob —
+        # feeding back long reasoning text with special chars can trigger
+        # provider 400 errors on the next turn.
+        messages.append({
+            "role": "assistant",
+            "content": json.dumps({"tool": tool_name, "input": tool_input}),
+        })
         messages.append({
             "role": "user",
             "content": f"Tool result for {tool_name}:\n{tool_result_str}",

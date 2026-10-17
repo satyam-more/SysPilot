@@ -6,8 +6,7 @@ import type { ModelStatus } from "../api/client";
 // in backend/harness/providers/provider_registry.py.
 const PROVIDER_MODELS: Record<string, string[]> = {
   groq: [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
+    "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
   ],
   openai: ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"],
@@ -129,7 +128,7 @@ function ApiKeySection({
   onUpdate: () => void;
 }) {
   const [provider, setProvider] = useState("groq");
-  const [model, setModel] = useState(PROVIDER_MODELS.groq[0]);
+  const [model, setModel] = useState<string>(PROVIDER_MODELS.groq[0]);
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);

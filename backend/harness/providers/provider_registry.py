@@ -26,11 +26,10 @@ SUPPORTED_PROVIDERS = {
     "groq": {
         "name": "Groq (free)",
         "models": [
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
+            "openai/gpt-oss-120b",
             "openai/gpt-oss-20b",
         ],
-        "default_model": "llama-3.3-70b-versatile",
+        "default_model": "openai/gpt-oss-120b",
     },
 }
 
@@ -50,9 +49,14 @@ def _load_config() -> None:
     if row:
         provider_name = row["provider_name"] or "openai"
         key_ref = row["key_ref"] or ""
+        # Use the saved model; fall back to the provider's default if absent.
+        saved_model = row["model"] if "model" in row.keys() else None
+        default_model = SUPPORTED_PROVIDERS.get(provider_name, {}).get(
+            "default_model", "gpt-4o-mini"
+        )
         _api_config = {
             "provider": provider_name,
-            "model": "gpt-4o-mini",  # model not persisted separately in first release
+            "model": saved_model or default_model,
             "key_ref": key_ref,
         }
         # Prefer API mode when a usable key exists; otherwise offline.
@@ -156,13 +160,20 @@ def _persist() -> None:
     key_ref = _api_config.get("key_ref") or None
     conn.execute(
         """
-        INSERT INTO provider_config (id, provider_name, key_ref, persistent, updated_at)
-        VALUES (1, ?, ?, ?, ?)
+        INSERT INTO provider_config (id, provider_name, model, key_ref, persistent, updated_at)
+        VALUES (1, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             provider_name = excluded.provider_name,
+            model = excluded.model,
             key_ref = excluded.key_ref,
             persistent = excluded.persistent,
             updated_at = excluded.updated_at
         """,
-        (_api_config["provider"], key_ref, persistent, now),
+        (
+            _api_config["provider"],
+            _api_config.get("model"),
+            key_ref,
+            persistent,
+            now,
+        ),
     )

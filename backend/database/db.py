@@ -97,6 +97,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS provider_config (
             id              INTEGER PRIMARY KEY CHECK (id = 1),
             provider_name   TEXT NOT NULL DEFAULT 'openai',
+            model           TEXT,           -- selected model name
             key_ref         TEXT,           -- opaque ref passed to keystore
             persistent      INTEGER,        -- 1=OS keyring, 0=session only
             updated_at      TEXT NOT NULL
@@ -104,3 +105,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
         COMMIT;
     """)
+
+    # Lightweight migration: add provider_config.model to pre-existing DBs.
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(provider_config)")}
+    if "model" not in cols:
+        conn.execute("ALTER TABLE provider_config ADD COLUMN model TEXT")
