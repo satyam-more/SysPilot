@@ -8,9 +8,12 @@ Run with:
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.auth import get_session_token, init_auth
 from backend.api.routes.ask import router as ask_router
@@ -80,8 +83,8 @@ app.include_router(ask_router)
 def dev_token() -> dict:
     """
     Dev-only endpoint: returns the session token for the Vite dev server.
-    In production, the token is injected via <meta name="tb-session"> tag.
-    Only works when called with a valid localhost Origin.
+    In the desktop/production build, the token is injected via the
+    <meta name="tb-session"> tag in the served index.html instead.
     """
     return {"token": get_session_token()}
 
@@ -91,6 +94,58 @@ def health() -> dict:
     return {"status": "ok", "service": "trailback"}
 
 
-@app.get("/")
-def root() -> dict:
-    return {"message": "TrailBack API is running. See /docs for endpoints."}
+# ---------------------------------------------------------------------------
+# Serve the built frontend (desktop / production mode)
+# ---------------------------------------------------------------------------
+# When frontend/dist exists (after `npm run build`), the backend serves the
+# React app same-origin and injects the real session token into index.html.
+# This removes the CORS/dev-token race entirely — the token is present in the
+# HTML before any JS runs.
+
+_FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+
+def _serve_index() -> HTMLResponse:
+    """Read index.html and inject the session token into the meta tag."""
+    index_path = _FRONTEND_DIST / "index.html"
+    html = index_path.read_text(encoding="utf-8")
+    token = get_session_token()
+    # Replace the empty meta content with the real token.
+    html = html.replace(
+        '<meta name="tb-session" content="" id="tb-session-token" />',
+        f'<meta name="tb-session" content="{token}" id="tb-session-token" />',
+    )
+    # Fallback for minified/reordered attributes.
+    if f'content="{token}"' not in html:
+        html = html.replace(
+            'name="tb-session" content=""',
+            f'name="tb-session" content="{token}"',
+        )
+    return HTMLResponse(content=html)
+
+
+if _FRONTEND_DIST.exists():
+    # Mount static assets (JS/CSS bundles) at /assets.
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(_FRONTEND_DIST / "assets")),
+        name="assets",
+    )
+
+    @app.get("/", response_class=HTMLResponse)
+    def serve_root() -> HTMLResponse:
+        return _serve_index()
+
+    # SPA fallback — any non-API path returns index.html so client routing works.
+    @app.get("/{full_path:path}", response_class=HTMLResponse)
+    def serve_spa(full_path: str) -> HTMLResponse:
+        # Serve index for client routes; real missing assets 404 via StaticFiles.
+        return _serve_index()
+
+else:
+    @app.get("/")
+    def root() -> dict:
+        return {
+            "message": "TrailBack API is running. Frontend not built yet — "
+            "run `npm run build` in frontend/. See /docs for endpoints."
+        }

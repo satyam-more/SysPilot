@@ -27,13 +27,14 @@ let SESSION_TOKEN = readSessionToken();
 
 // In dev mode, the meta tag is empty (vite serves index.html directly,
 // not through the backend). Fetch a dev token from the backend.
+// tokenReady resolves once the token is available (or failed). Every
+// outbound request awaits this so no request fires with an empty token.
 async function ensureDevToken(): Promise<void> {
   if (SESSION_TOKEN) return;
 
   try {
-    const resp = await axios.get("http://127.0.0.1:8000/api/dev-token", {
-      headers: { Origin: "http://localhost:5173" },
-    });
+    // In dev mode, request goes through Vite proxy to backend.
+    const resp = await axios.get("/api/dev-token");
     SESSION_TOKEN = resp.data.token;
   } catch {
     console.warn(
@@ -42,17 +43,30 @@ async function ensureDevToken(): Promise<void> {
   }
 }
 
+// Kick off token fetch immediately and keep the promise so requests can await it.
+const tokenReady: Promise<void> = SESSION_TOKEN
+  ? Promise.resolve()
+  : ensureDevToken();
+
 // ---------------------------------------------------------------------------
 // Axios instance
 // ---------------------------------------------------------------------------
 
+// Use empty baseURL in dev mode so requests go through the Vite proxy
+// (vite.config.ts proxies /api → http://127.0.0.1:8000).
+// In production, the backend serves the frontend and same-origin applies.
+const API_BASE = import.meta.env.DEV ? "" : "";
+
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000",
+  baseURL: API_BASE,
   headers: { "X-Session-Token": "" },
 });
 
 // Inject the session token on every request.
-api.interceptors.request.use((config) => {
+// Await tokenReady first so the very first request still carries the token
+// in dev mode (avoids a startup race that would trigger a false 403).
+api.interceptors.request.use(async (config) => {
+  await tokenReady;
   config.headers["X-Session-Token"] = SESSION_TOKEN;
   return config;
 });
@@ -68,10 +82,7 @@ api.interceptors.response.use(
   }
 );
 
-// Initialise dev token if needed (fire and forget in dev mode).
-if (!SESSION_TOKEN) {
-  ensureDevToken();
-}
+// (token fetch already started above via tokenReady)
 
 // ---------------------------------------------------------------------------
 // Typed API methods

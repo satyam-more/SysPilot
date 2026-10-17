@@ -19,3 +19,9 @@ watchdog==6.0.0
 
 # Document parsing
 python-docx==1.2.0
+
+# Desktop shell (native window via Qt6 WebEngine)
+pywebview==6.2.1
+qtpy==2.4.3
+PyQt6==6.11.0
+PyQt6-WebEngine==6.11.0

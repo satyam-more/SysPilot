@@ -50,9 +50,10 @@ def ingest_event(event: EventCreate) -> Event | None:
     no DB work is done at all when privacy is active.
     """
     # Import here to avoid circular imports at module load time.
-    from backend.privacy.controller import privacy_controller
+    from backend.privacy.controller import PrivacyController
 
-    # Authoritative gate — synchronous in-memory check, no race window.
+    # Authoritative gate — get the current singleton instance.
+    privacy_controller = PrivacyController()
     if not privacy_controller.is_recording_permitted(event.source):
         logger.debug("Event from %r dropped — privacy mode active.", event.source)
         return None

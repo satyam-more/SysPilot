@@ -76,7 +76,7 @@ class AskResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.post("/ask", response_model=AskResponse)
-def ask(
+async def ask(
     body: AskRequest,
     request: Request,
     _auth: None = Depends(validate_browser_request),
@@ -109,7 +109,7 @@ def ask(
 
     try:
         from backend.harness.loop import run_agent_loop
-        result = run_agent_loop(
+        result = await run_agent_loop(
             user_question=body.question,
             context_hint=context_hint_str,
         )

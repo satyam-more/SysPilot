@@ -1,9 +1,9 @@
 """
 Minimal agent loop.
 
-Connects to the local Ollama model (offline) or an external API provider.
-Iterates up to MAX_ITERATIONS, calling tools as requested by the model,
-then returning a final answer.
+Uses the provider registry to get the active provider (Ollama offline or
+external API). Iterates up to MAX_ITERATIONS, calling tools as requested
+by the model, then returning a final answer.
 
 Privacy gate: if privacy mode is active when /api/ask is called,
 the loop is never started — the route handler returns 403 before here.
@@ -15,8 +15,8 @@ from typing import Any
 
 import httpx
 
+from backend.harness.providers import provider_registry
 from backend.harness.registry import get_tool, tool_schemas_for_model
-from backend.memory.search import search_events
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +24,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 MAX_ITERATIONS = 6
-TOOL_TIMEOUT_SECONDS = 10
-MODEL_TIMEOUT_SECONDS = 30
 RETRY_LIMIT = 2
-
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "qwen2.5:3b"
 
 SYSTEM_PROMPT_TEMPLATE = """You are TrailBack, a personal AI memory assistant.
 You have access to the user's recent activity log — files they edited, commands they ran, and documents they worked on.
@@ -59,18 +54,22 @@ def _build_system_prompt() -> str:
     return SYSTEM_PROMPT_TEMPLATE.format(tool_list=tool_list)
 
 
-def _call_ollama(messages: list[dict], timeout: float = MODEL_TIMEOUT_SECONDS) -> str:
-    """Send a chat request to Ollama and return the assistant message content."""
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": messages,
-        "stream": False,
-    }
-    with httpx.Client(timeout=timeout) as client:
-        resp = client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
-        resp.raise_for_status()
-    data = resp.json()
-    return data["message"]["content"]
+async def _call_model(messages: list[dict]) -> str:
+    """
+    Call the active provider and return the assistant message content.
+    Uses provider_registry.get_active_provider() — works for both
+    offline (Ollama) and API mode.
+    """
+    provider = provider_registry.get_active_provider()
+    response = await provider.generate(messages=messages, max_tokens=1024)
+
+    # Ollama returns {"message": {"content": "..."}}
+    # OpenAI returns {"choices": [{"message": {"content": "..."}}]}
+    if "message" in response and "content" in response["message"]:
+        return response["message"]["content"]
+    if "choices" in response and len(response["choices"]) > 0:
+        return response["choices"][0]["message"]["content"]
+    return response.get("content", "")
 
 
 def _try_parse_tool_call(text: str) -> dict | None:
@@ -79,7 +78,6 @@ def _try_parse_tool_call(text: str) -> dict | None:
     Returns the parsed dict if valid, None if it's a plain text answer.
     """
     text = text.strip()
-    # Look for a JSON object starting with {"tool":
     if not text.startswith("{"):
         return None
     try:
@@ -108,7 +106,7 @@ def _execute_tool(tool_name: str, tool_input: dict) -> str:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def run_agent_loop(
+async def run_agent_loop(
     user_question: str,
     context_hint: str | None = None,
 ) -> dict[str, Any]:
@@ -150,7 +148,7 @@ def run_agent_loop(
         model_response = None
         for attempt in range(RETRY_LIMIT):
             try:
-                model_response = _call_ollama(messages)
+                model_response = await _call_model(messages)
                 break
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 logger.warning(
@@ -165,7 +163,7 @@ def run_agent_loop(
         tool_call = _try_parse_tool_call(model_response)
 
         if tool_call is None:
-            # Model gave a final answer — extract any cited event IDs
+            # Model gave a final answer
             return {
                 "answer": model_response,
                 "evidence": _collect_evidence(cited_event_ids),

@@ -35,10 +35,22 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Approved browser origins (exact match required)
 # ---------------------------------------------------------------------------
-_BROWSER_ORIGINS: frozenset[str] = frozenset({
+_BROWSER_ORIGINS: set[str] = {
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-})
+    "http://localhost:5173",    # Vite dev server
+    "http://127.0.0.1:5173",   # Vite dev server (IP)
+}
+
+
+def register_origin(origin: str) -> None:
+    """
+    Register an additional allowed browser origin at runtime.
+    Used by the desktop launcher to allow the WebView's dynamic loopback
+    origin (e.g. http://127.0.0.1:<random-port>).
+    """
+    _BROWSER_ORIGINS.add(origin)
+    logger.info("Registered allowed origin: %s", origin)
 
 # ---------------------------------------------------------------------------
 # Session token (browser) — generated once at import time
@@ -93,10 +105,18 @@ def validate_browser_request(
     """
     origin = request.headers.get("origin")
 
-    # Reject missing, "null", or disallowed origins outright.
-    if not origin or origin == "null" or origin not in _BROWSER_ORIGINS:
-        logger.warning("Rejected request: disallowed Origin %r", origin)
-        raise HTTPException(status_code=403, detail="Forbidden")
+    # Origin policy:
+    #   - If Origin is PRESENT, it must be in the allowlist. A real browser
+    #     always attaches Origin to cross-origin requests, so a malicious
+    #     website cannot bypass this. "null" (sandboxed/file://) is rejected.
+    #   - If Origin is ABSENT, the request is same-origin from the desktop
+    #     WebView (WebEngine omits Origin on same-origin GETs). This is safe
+    #     because a cross-origin browser attack always carries an Origin.
+    #     The session token below is still required and validated.
+    if origin is not None:
+        if origin == "null" or origin not in _BROWSER_ORIGINS:
+            logger.warning("Rejected request: disallowed Origin %r", origin)
+            raise HTTPException(status_code=403, detail="Forbidden")
 
     if not x_session_token:
         raise HTTPException(status_code=403, detail="Forbidden")
