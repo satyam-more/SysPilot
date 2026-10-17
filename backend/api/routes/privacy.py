@@ -31,8 +31,11 @@ def resume(
     request: Request,
     _auth: None = Depends(validate_browser_request),
 ) -> dict:
-    """Resume normal recording."""
+    """Resume normal recording and restart collectors that were stopped."""
     privacy_controller.deactivate_privacy()
+    # Restart the filesystem collector (it was stopped on pause).
+    from backend.collectors.filesystem import filesystem_collector
+    filesystem_collector.start()
     return {"state": "active"}
 
 

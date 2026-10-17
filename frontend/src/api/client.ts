@@ -150,4 +150,21 @@ export const askAPI = {
     api.post<AskResponse>("/api/ask", { question, context_hint: contextHint }),
 };
 
+export interface TrackingStatus {
+  collector: "running" | "stopped";
+  watched_directories: string[];
+  excluded_folders: string[];
+  excluded_extensions: string[];
+}
+
+export const trackingAPI = {
+  getStatus: () => api.get<TrackingStatus>("/api/tracking/status"),
+  addDirectory: (path: string) =>
+    api.post<TrackingStatus>("/api/tracking/directories", { path }),
+  removeDirectory: (path: string) =>
+    api.delete<TrackingStatus>("/api/tracking/directories", { data: { path } }),
+  start: () => api.post("/api/tracking/start"),
+  stop: () => api.post("/api/tracking/stop"),
+};
+
 export default api;

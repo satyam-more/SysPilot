@@ -20,8 +20,11 @@ from backend.api.routes.ask import router as ask_router
 from backend.api.routes.events import router as events_router
 from backend.api.routes.model_settings import router as model_router
 from backend.api.routes.privacy import router as privacy_router
+from backend.api.routes.tracking import router as tracking_router
+from backend.collectors.filesystem import filesystem_collector
 from backend.database.db import init_db
 from backend.harness.providers import provider_registry
+from backend.privacy.controller import privacy_controller
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,9 +53,20 @@ async def lifespan(app: FastAPI):
     # injected into the served HTML via <meta name="tb-session">.
     print(f"\n[TrailBack] Session token: {token}\n")
 
+    # Register the filesystem collector with the privacy controller so it
+    # halts on privacy activation, then start it (watches configured dirs).
+    privacy_controller.register_collector(
+        "filesystem",
+        stop_fn=filesystem_collector.stop,
+        status_fn=filesystem_collector.status,
+    )
+    filesystem_collector.start()
+    logger.info("Filesystem collector initialised.")
+
     yield
 
-    # Shutdown — nothing to clean up for now
+    # Shutdown — stop the collector cleanly.
+    filesystem_collector.stop()
     logger.info("TrailBack shutting down.")
 
 
@@ -77,6 +91,7 @@ app.include_router(events_router)
 app.include_router(privacy_router)
 app.include_router(model_router)
 app.include_router(ask_router)
+app.include_router(tracking_router)
 
 
 @app.get("/api/dev-token")

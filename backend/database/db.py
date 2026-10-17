@@ -103,6 +103,18 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             updated_at      TEXT NOT NULL
         );
 
+        -- Directories the filesystem collector watches.
+        CREATE TABLE IF NOT EXISTS watched_directories (
+            path            TEXT PRIMARY KEY,
+            added_at        TEXT NOT NULL
+        );
+
+        -- Simple key/value settings (excluded extensions, folders, etc.).
+        CREATE TABLE IF NOT EXISTS tracking_settings (
+            key             TEXT PRIMARY KEY,
+            value           TEXT NOT NULL
+        );
+
         COMMIT;
     """)
 

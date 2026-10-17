@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { modelAPI, privacyAPI } from "../api/client";
-import type { ModelStatus } from "../api/client";
+import { modelAPI, privacyAPI, trackingAPI } from "../api/client";
+import type { ModelStatus, TrackingStatus } from "../api/client";
 
 // Models available per provider. Keep in sync with SUPPORTED_PROVIDERS
 // in backend/harness/providers/provider_registry.py.
@@ -42,8 +42,136 @@ export default function SettingsPage() {
       {error && <div className="notice error">{error}</div>}
       <ModelModeSection status={status} onUpdate={fetchStatus} />
       <ApiKeySection status={status} onUpdate={fetchStatus} />
+      <TrackingSection />
       <PrivacySection />
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Activity Tracking
+// ---------------------------------------------------------------------------
+
+function TrackingSection() {
+  const [status, setStatus] = useState<TrackingStatus | null>(null);
+  const [newPath, setNewPath] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = async () => {
+    try {
+      const resp = await trackingAPI.getStatus();
+      setStatus(resp.data);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const addDir = async () => {
+    const p = newPath.trim();
+    if (!p) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const resp = await trackingAPI.addDirectory(p);
+      setStatus(resp.data);
+      setNewPath("");
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? "Could not add directory.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeDir = async (path: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const resp = await trackingAPI.removeDirectory(path);
+      setStatus(resp.data);
+    } catch {
+      setError("Could not remove directory.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const running = status?.collector === "running";
+  const dirs = status?.watched_directories ?? [];
+
+  return (
+    <div className="card">
+      <h2>Activity Tracking</h2>
+      <p style={{ marginBottom: 12, color: "var(--text-muted)" }}>
+        TrailBack records file activity in the folders below. Nothing is
+        recorded in folders you don't add here.
+      </p>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <span className={`status-badge ${running ? "online" : "offline"}`}>
+          <span className="status-dot" />
+          {running ? "Watching" : dirs.length ? "Idle" : "No folders"}
+        </span>
+        {running && (
+          <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
+            {dirs.length} folder{dirs.length === 1 ? "" : "s"} tracked
+          </span>
+        )}
+      </div>
+
+      {error && <div className="notice error">{error}</div>}
+
+      {dirs.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          {dirs.map((d) => (
+            <div
+              key={d}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 0",
+                borderBottom: "1px solid var(--border)",
+                fontSize: 13,
+              }}
+            >
+              <span style={{ fontFamily: "var(--mono)", wordBreak: "break-all" }}>
+                {d}
+              </span>
+              <button
+                className="btn-secondary"
+                style={{ padding: "4px 10px", fontSize: 12 }}
+                disabled={busy}
+                onClick={() => removeDir(d)}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="form-row">
+        <label>Add a folder to track</label>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="text"
+            value={newPath}
+            onChange={(e) => setNewPath(e.target.value)}
+            placeholder="/home/you/projects/my-app"
+            style={{ flex: 1 }}
+            onKeyDown={(e) => e.key === "Enter" && addDir()}
+          />
+          <button className="btn-primary" disabled={busy || !newPath.trim()} onClick={addDir}>
+            Add
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
