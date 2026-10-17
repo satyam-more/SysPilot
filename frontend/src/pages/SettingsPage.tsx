@@ -2,6 +2,17 @@ import { useState, useEffect, useCallback } from "react";
 import { modelAPI, privacyAPI } from "../api/client";
 import type { ModelStatus } from "../api/client";
 
+// Models available per provider. Keep in sync with SUPPORTED_PROVIDERS
+// in backend/harness/providers/provider_registry.py.
+const PROVIDER_MODELS: Record<string, string[]> = {
+  groq: [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "openai/gpt-oss-20b",
+  ],
+  openai: ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"],
+};
+
 export default function SettingsPage() {
   const [status, setStatus] = useState<ModelStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,8 +128,8 @@ function ApiKeySection({
   status: ModelStatus | null;
   onUpdate: () => void;
 }) {
-  const [provider, setProvider] = useState("openai");
-  const [model, setModel] = useState("gpt-4o-mini");
+  const [provider, setProvider] = useState("groq");
+  const [model, setModel] = useState(PROVIDER_MODELS.groq[0]);
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -243,19 +254,28 @@ function ApiKeySection({
         <>
           <div className="form-row">
             <label>Provider</label>
-            <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+            <select
+              value={provider}
+              onChange={(e) => {
+                const p = e.target.value;
+                setProvider(p);
+                // Reset model to the new provider's first option.
+                setModel(PROVIDER_MODELS[p][0]);
+              }}
+            >
+              <option value="groq">Groq (free)</option>
               <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic</option>
             </select>
           </div>
           <div className="form-row">
             <label>Model</label>
-            <input
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="e.g. gpt-4o-mini"
-            />
+            <select value={model} onChange={(e) => setModel(e.target.value)}>
+              {PROVIDER_MODELS[provider].map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="form-row">
             <label>API Key</label>
@@ -263,7 +283,7 @@ function ApiKeySection({
               type="password"
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              placeholder="sk-..."
+              placeholder={provider === "groq" ? "gsk_..." : "sk-..."}
             />
           </div>
           <div className="form-actions">

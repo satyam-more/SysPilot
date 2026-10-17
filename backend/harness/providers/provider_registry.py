@@ -23,6 +23,15 @@ SUPPORTED_PROVIDERS = {
         "models": ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"],
         "default_model": "gpt-4o-mini",
     },
+    "groq": {
+        "name": "Groq (free)",
+        "models": [
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "openai/gpt-oss-20b",
+        ],
+        "default_model": "llama-3.3-70b-versatile",
+    },
 }
 
 _current_mode: Literal["offline", "api"] = "offline"

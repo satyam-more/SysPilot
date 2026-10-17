@@ -20,17 +20,33 @@ from backend.security.keystore import KeyNotFoundError, get_key, key_is_configur
 
 logger = logging.getLogger(__name__)
 
-# The only URL this provider will ever send requests to.
-# Changing this requires a code change and review, not a config change.
-_TRUSTED_BASE_URL = "https://api.openai.com/v1"
+# Trusted provider endpoints. These are hardcoded constants — not read from
+# user input or the database. Each is OpenAI-compatible (same /chat/completions
+# and /models API shape). Adding a provider here requires a code change + review.
+_PROVIDER_ENDPOINTS: dict[str, str] = {
+    "openai": "https://api.openai.com/v1",
+    "groq": "https://api.groq.com/openai/v1",
+}
 
-# Validate the constant at import time — fails fast if someone edits it incorrectly.
-_VALIDATED_BASE_URL: str = validate_provider_url(_TRUSTED_BASE_URL)
+# Validate every endpoint at import time — fails fast if one is malformed.
+_VALIDATED_ENDPOINTS: dict[str, str] = {
+    name: validate_provider_url(url) for name, url in _PROVIDER_ENDPOINTS.items()
+}
 
-# Exact allowlist of approved provider hostnames for the first release.
-_APPROVED_PROVIDER_HOSTS: frozenset[str] = frozenset({
-    urllib.parse.urlparse(_TRUSTED_BASE_URL).hostname,
-})
+# Backwards-compatible default (OpenAI) still exported for existing imports/tests.
+_TRUSTED_BASE_URL = _PROVIDER_ENDPOINTS["openai"]
+_VALIDATED_BASE_URL = _VALIDATED_ENDPOINTS["openai"]
+
+# Exact allowlist of approved provider hostnames. A URL whose hostname is not
+# here is rejected before any request — blocks subdomain spoofing / tampering.
+_APPROVED_PROVIDER_HOSTS: frozenset[str] = frozenset(
+    urllib.parse.urlparse(url).hostname for url in _PROVIDER_ENDPOINTS.values()
+)
+
+
+def _endpoint_for(provider: str) -> str:
+    """Return the validated base URL for a provider, defaulting to OpenAI."""
+    return _VALIDATED_ENDPOINTS.get(provider, _VALIDATED_BASE_URL)
 
 
 class InvalidAPIKeyError(Exception):
@@ -76,8 +92,9 @@ class APIProvider(ModelProvider):
         tools: list[dict] | None = None,
         max_tokens: int = 1024,
     ) -> dict:
+        base_url = _endpoint_for(self._provider)
         # Assert approved host before any HTTP call.
-        _assert_approved_host(_VALIDATED_BASE_URL)
+        _assert_approved_host(base_url)
 
         # Retrieve key immediately before use — do not cache.
         if not self._key_ref:
@@ -85,7 +102,7 @@ class APIProvider(ModelProvider):
         key = get_key(self._key_ref)
         try:
             async with httpx.AsyncClient(
-                base_url=_VALIDATED_BASE_URL,
+                base_url=base_url,
                 follow_redirects=False,
                 timeout=httpx.Timeout(30.0),
             ) as client:
@@ -148,8 +165,9 @@ class APIProvider(ModelProvider):
         from backend.security.keystore import storage_is_persistent
 
         persistent = storage_is_persistent(self._provider)
+        base_url = _endpoint_for(self._provider)
         try:
-            _assert_approved_host(_VALIDATED_BASE_URL)
+            _assert_approved_host(base_url)
             key = get_key(self._key_ref or f"{self._provider}_key")
         except KeyNotFoundError:
             return ProviderStatus(
@@ -164,7 +182,7 @@ class APIProvider(ModelProvider):
         # actually works. No inference, no local compute — just a key check.
         try:
             async with httpx.AsyncClient(
-                base_url=_VALIDATED_BASE_URL,
+                base_url=base_url,
                 follow_redirects=False,
                 timeout=httpx.Timeout(10.0),
             ) as client:
