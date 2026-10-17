@@ -67,11 +67,15 @@ def get_active_provider() -> ModelProvider:
 
 def get_status() -> ProviderStatus:
     """Return current provider status without making a network call."""
+    from backend.security.keystore import storage_is_persistent
+
     provider = get_active_provider()
     model = provider.get_active_model()
-    configured = key_is_configured(_api_config["provider"]) if _current_mode == "api" else True
-    from backend.security.keystore import storage_is_persistent
-    persistent = storage_is_persistent(_api_config["provider"]) if _current_mode == "api" else True
+    # Always report the REAL key state, regardless of mode. Previously this
+    # hardcoded True in offline mode, which made the UI falsely claim a key
+    # was configured when none existed.
+    configured = key_is_configured(_api_config["provider"])
+    persistent = storage_is_persistent(_api_config["provider"])
     return ProviderStatus(
         mode=_current_mode,
         model=model,
