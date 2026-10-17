@@ -29,10 +29,20 @@ RETRY_LIMIT = 2
 SYSTEM_PROMPT_TEMPLATE = """You are TrailBack, a personal AI memory assistant.
 You have access to the user's recent activity log — files they edited, commands they ran, and documents they worked on.
 
+CRITICAL RULE — READ FIRST:
+You have NO knowledge of the user's activity except what the tools return. You
+MUST call a tool (list_events or search_events) BEFORE giving any answer. You
+are strictly FORBIDDEN from naming any file, command, URL, or action that did
+not appear in a tool result. Never invent events, file names, timestamps, or
+commands. If you have not called a tool yet, your only valid response is a tool
+call. If the tools return nothing relevant, say you found no matching activity —
+do NOT make something up.
+
 Your job:
-1. Search the activity log using the provided tools. Use SHORT keyword queries
-   (1-2 words like "Rust" or "cargo"), not full sentences. Broad queries find
-   more. If the first search returns nothing, try a broader single keyword.
+1. Search the activity log using the provided tools. For "what was I doing"
+   style questions, call list_events first. For topic questions, use
+   search_events with SHORT keyword queries (1-2 words like "Rust" or "cargo").
+   If the first search returns nothing, try a broader single keyword.
 2. Answer the user's question based only on what you find.
 3. If you infer something not directly stated in the evidence, say "I think..." or "Based on the evidence, it seems...".
 4. Never claim the user did something if you have no event that confirms it.
@@ -208,6 +218,8 @@ async def run_agent_loop(
 
     tool_call_log: list[dict] = []
     cited_event_ids: set[str] = set()
+    searched_at_least_once = False
+    forced_search_injected = False
 
     for iteration in range(MAX_ITERATIONS):
         logger.debug("Agent iteration %d", iteration + 1)
@@ -231,7 +243,42 @@ async def run_agent_loop(
         tool_call = _try_parse_tool_call(model_response)
 
         if tool_call is None:
-            # Model gave a final answer
+            # GUARD: the model must search before it is allowed to answer.
+            # Models sometimes fabricate activity on turn 1 without searching.
+            # If it tries to answer before any tool call, force a search once.
+            if not searched_at_least_once and not forced_search_injected:
+                forced_search_injected = True
+                logger.warning(
+                    "Model answered without searching — forcing a search."
+                )
+                messages.append({"role": "assistant", "content": model_response})
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Do NOT answer yet. You have not searched the activity "
+                        "log. You must call a tool first. If the question is "
+                        "about recent or general activity, call list_events. "
+                        "If it is about a topic, call search_events with a short "
+                        "keyword. Respond ONLY with the tool-call JSON."
+                    ),
+                })
+                continue
+
+            # If the model answered after searching but found NO evidence,
+            # replace any fabricated answer with an honest no-data response.
+            if searched_at_least_once and not cited_event_ids:
+                return {
+                    "answer": (
+                        "I couldn't find any matching activity in your log for "
+                        "that. I only report what was actually recorded, so "
+                        "there's nothing to show here."
+                    ),
+                    "evidence": [],
+                    "iterations": iteration + 1,
+                    "tool_calls": tool_call_log,
+                }
+
+            # Model gave a final answer backed by at least one real event.
             return {
                 "answer": model_response,
                 "evidence": _collect_evidence(cited_event_ids),
@@ -243,6 +290,10 @@ async def run_agent_loop(
         tool_name = tool_call["tool"]
         tool_input = tool_call.get("input", {})
         tool_result_str = _execute_tool(tool_name, tool_input)
+
+        # A search/list/get tool ran — the model is now grounded.
+        if tool_name in ("search_events", "list_events", "get_event"):
+            searched_at_least_once = True
 
         # Track event IDs returned by search/list tools
         try:
