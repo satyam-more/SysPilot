@@ -77,35 +77,64 @@ def _build_system_prompt() -> str:
     return SYSTEM_PROMPT_TEMPLATE.format(tool_list=tool_list)
 
 
-async def _call_model(messages: list[dict]) -> str:
+def _native_tool_schemas() -> list[dict]:
+    """Tool schemas in OpenAI function-calling format."""
+    return tool_schemas_for_model()
+
+
+async def _call_model(messages: list[dict]) -> dict:
     """
-    Call the active provider and return the assistant message content.
-    Uses provider_registry.get_active_provider() — works for both
-    offline (Ollama) and API mode.
+    Call the active provider using NATIVE tool-calling and return a structured
+    result:
+
+        {"kind": "tool_call", "tool": str, "input": dict}   OR
+        {"kind": "text", "text": str}
+
+    Native tool-calling (the provider's `tools` param + structured
+    `tool_calls` in the response) is far more reliable than asking the model
+    to hand-write JSON in prose, which gpt-oss models do inconsistently.
     """
     provider = provider_registry.get_active_provider()
-    # Larger budget: reasoning models (e.g. gpt-oss) spend tokens on an
-    # internal reasoning field before producing content.
-    response = await provider.generate(messages=messages, max_tokens=2048)
+    response = await provider.generate(
+        messages=messages,
+        tools=_native_tool_schemas(),
+        max_tokens=2048,
+    )
 
-    # Ollama returns {"message": {"content": "..."}}
-    # OpenAI / Groq return {"choices": [{"message": {"content": "...", "reasoning": "..."}}]}
+    # Extract the assistant message (Ollama: message; OpenAI/Groq: choices[0]).
     msg: dict = {}
     if "message" in response and isinstance(response["message"], dict):
         msg = response["message"]
     elif "choices" in response and response["choices"]:
         msg = response["choices"][0].get("message", {})
 
+    # 1. Native tool_calls (preferred).
+    tool_calls = msg.get("tool_calls")
+    if tool_calls:
+        call = tool_calls[0]
+        fn = call.get("function", {})
+        name = fn.get("name", "")
+        raw_args = fn.get("arguments", "{}")
+        try:
+            args = json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+        except (json.JSONDecodeError, TypeError):
+            args = {}
+        if name:
+            return {"kind": "tool_call", "tool": name, "input": args, "call_id": call.get("id")}
+
+    # 2. Content text.
     content = (msg.get("content") or "").strip()
+    # 3. Fallback: some models emit a text-JSON tool call even with native tools.
     if content:
-        return content
-    # Reasoning-model fallback: some Groq models (gpt-oss) leave content empty
-    # and put the usable text in "reasoning". Use it so the loop still gets an
-    # answer instead of exiting with an empty response.
+        parsed = _try_parse_tool_call(content)
+        if parsed:
+            return {"kind": "tool_call", "tool": parsed["tool"], "input": parsed.get("input", {}), "call_id": None}
+        return {"kind": "text", "text": content}
+
+    # 4. Reasoning-only output (gpt-oss) — treat as text but strip it so the
+    # loop doesn't surface "I'll search..." prose as an answer.
     reasoning = (msg.get("reasoning") or "").strip()
-    if reasoning:
-        return reasoning
-    return response.get("content", "")
+    return {"kind": "text", "text": reasoning}
 
 
 def _try_parse_tool_call(text: str) -> dict | None:
@@ -225,10 +254,10 @@ async def run_agent_loop(
         logger.debug("Agent iteration %d", iteration + 1)
 
         # Retry logic for model timeouts
-        model_response = None
+        result = None
         for attempt in range(RETRY_LIMIT):
             try:
-                model_response = await _call_model(messages)
+                result = await _call_model(messages)
                 break
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 logger.warning(
@@ -239,33 +268,27 @@ async def run_agent_loop(
                         "Model unreachable after retries."
                     ) from exc
 
-        # Check if the model is making a tool call
-        tool_call = _try_parse_tool_call(model_response)
+        if result["kind"] == "text":
+            model_text = result["text"]
 
-        if tool_call is None:
             # GUARD: the model must search before it is allowed to answer.
-            # Models sometimes fabricate activity on turn 1 without searching.
-            # If it tries to answer before any tool call, force a search once.
             if not searched_at_least_once and not forced_search_injected:
                 forced_search_injected = True
                 logger.warning(
                     "Model answered without searching — forcing a search."
                 )
-                messages.append({"role": "assistant", "content": model_response})
                 messages.append({
                     "role": "user",
                     "content": (
-                        "Do NOT answer yet. You have not searched the activity "
-                        "log. You must call a tool first. If the question is "
-                        "about recent or general activity, call list_events. "
-                        "If it is about a topic, call search_events with a short "
-                        "keyword. Respond ONLY with the tool-call JSON."
+                        "You have not searched yet. Call the list_events tool "
+                        "now (for recent/general activity) or search_events "
+                        "with a short keyword (for a topic). Use the tool — do "
+                        "not describe what you will do."
                     ),
                 })
                 continue
 
-            # If the model answered after searching but found NO evidence,
-            # replace any fabricated answer with an honest no-data response.
+            # Searched but no evidence → honest no-data answer.
             if searched_at_least_once and not cited_event_ids:
                 return {
                     "answer": (
@@ -278,24 +301,23 @@ async def run_agent_loop(
                     "tool_calls": tool_call_log,
                 }
 
-            # Model gave a final answer backed by at least one real event.
+            # Final answer backed by at least one real event.
             return {
-                "answer": model_response,
+                "answer": model_text,
                 "evidence": _collect_evidence(cited_event_ids),
                 "iterations": iteration + 1,
                 "tool_calls": tool_call_log,
             }
 
-        # Execute the tool
-        tool_name = tool_call["tool"]
-        tool_input = tool_call.get("input", {})
+        # --- Tool call ---
+        tool_name = result["tool"]
+        tool_input = result.get("input", {})
+        call_id = result.get("call_id")
         tool_result_str = _execute_tool(tool_name, tool_input)
 
-        # A search/list/get tool ran — the model is now grounded.
         if tool_name in ("search_events", "list_events", "get_event"):
             searched_at_least_once = True
 
-        # Track event IDs returned by search/list tools
         try:
             result_data = json.loads(tool_result_str)
             for ev in result_data.get("events", []):
@@ -312,18 +334,36 @@ async def run_agent_loop(
             "result_preview": tool_result_str[:500],
         })
 
-        # Add the exchange to the conversation. Use a clean, compact assistant
-        # message (the parsed tool call) rather than the raw reasoning blob —
-        # feeding back long reasoning text with special chars can trigger
-        # provider 400 errors on the next turn.
-        messages.append({
-            "role": "assistant",
-            "content": json.dumps({"tool": tool_name, "input": tool_input}),
-        })
-        messages.append({
-            "role": "user",
-            "content": f"Tool result for {tool_name}:\n{tool_result_str}",
-        })
+        # Record the assistant tool-call turn and the tool result using the
+        # native tool-calling message shape so the provider keeps context.
+        if call_id:
+            messages.append({
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{
+                    "id": call_id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_name,
+                        "arguments": json.dumps(tool_input),
+                    },
+                }],
+            })
+            messages.append({
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": tool_result_str,
+            })
+        else:
+            # Fallback (text-JSON path): use plain messages.
+            messages.append({
+                "role": "assistant",
+                "content": json.dumps({"tool": tool_name, "input": tool_input}),
+            })
+            messages.append({
+                "role": "user",
+                "content": f"Tool result for {tool_name}:\n{tool_result_str}",
+            })
 
     raise RuntimeError(
         f"Agent loop exceeded MAX_ITERATIONS ({MAX_ITERATIONS}) without a final answer."
