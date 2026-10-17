@@ -1,0 +1,15 @@
+# TrailBack — pinned development/test dependencies
+# Install with: pip install -r requirements.txt -r requirements-dev.txt
+
+# Test runner
+pytest==9.1.1
+pytest-asyncio==1.4.0
+
+# HTTP mock for provider tests
+respx==0.23.1
+
+# Linter / formatter
+ruff==0.17.1
+
+# Type checker
+mypy==1.15.0

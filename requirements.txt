@@ -1,0 +1,21 @@
+# TrailBack — pinned production dependencies
+# Generated: 2026-10-17 | Python 3.14.4
+
+# Web framework
+fastapi==0.143.3
+uvicorn[standard]==0.54.0
+
+# Data validation
+pydantic==2.14.1
+
+# HTTP client (for provider API calls)
+httpx==0.28.1
+
+# OS secret store
+keyring==25.7.0
+
+# Filesystem watcher
+watchdog==6.0.0
+
+# Document parsing
+python-docx==1.2.0
