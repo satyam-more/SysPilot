@@ -1,0 +1,234 @@
+:root {
+  --bg: #0f1115;
+  --surface: #1a1d24;
+  --surface-hover: #232831;
+  --border: #2a2f3a;
+  --text: #e0e0e8;
+  --text-muted: #8a8f9c;
+  --accent: #4a9eff;
+  --accent-hover: #3a8eef;
+  --danger: #e5484d;
+  --success: #30a46c;
+  --warning: #f5a623;
+  --radius: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  transition: background 0.15s;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input, select {
+  font-family: inherit;
+  font-size: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  outline: none;
+}
+
+input:focus, select:focus {
+  border-color: var(--accent);
+}
+
+/* Layout */
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.navbar h1 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.navbar nav {
+  display: flex;
+  gap: 16px;
+}
+
+.navbar a {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.navbar a:hover, .navbar a.active {
+  color: var(--text);
+}
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.card h2 {
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+/* Forms */
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.form-row label {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.form-row input, .form-row select {
+  width: 100%;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: var(--surface-hover);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+
+/* Status indicators */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.status-badge.online {
+  background: rgba(48, 164, 108, 0.15);
+  color: var(--success);
+}
+
+.status-badge.offline {
+  background: rgba(138, 143, 156, 0.15);
+  color: var(--text-muted);
+}
+
+.status-badge.error {
+  background: rgba(229, 72, 77, 0.15);
+  color: var(--danger);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Notices */
+.notice {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.notice.warning {
+  background: rgba(245, 166, 35, 0.1);
+  color: var(--warning);
+  border: 1px solid rgba(245, 166, 35, 0.3);
+}
+
+.notice.success {
+  background: rgba(48, 164, 108, 0.1);
+  color: var(--success);
+  border: 1px solid rgba(48, 164, 108, 0.3);
+}
+
+.notice.error {
+  background: rgba(229, 72, 77, 0.1);
+  color: var(--danger);
+  border: 1px solid rgba(229, 72, 77, 0.3);
+}
+
+/* Session expired banner */
+.session-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: var(--danger);
+  color: white;
+  text-align: center;
+  padding: 10px;
+  font-size: 14px;
+  z-index: 1000;
+}
