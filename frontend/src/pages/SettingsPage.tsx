@@ -136,9 +136,26 @@ function ApiKeySection({
       setKey("");
       setMessage({
         type: "success",
-        text: `Key saved. Masked: ${resp.data.masked_key}`,
+        text: `Key saved (${resp.data.masked_key}). Switched to API mode. Testing connection…`,
       });
       await onUpdate();
+      // Auto-verify the key works right after saving.
+      try {
+        const test = await modelAPI.testConnection();
+        if (test.data.success) {
+          setMessage({
+            type: "success",
+            text: `Connected to ${test.data.model}. API mode is active.`,
+          });
+        } else {
+          setMessage({
+            type: "error",
+            text: test.data.error ?? "Key saved but connection test failed.",
+          });
+        }
+      } catch {
+        /* status refresh already done */
+      }
     } catch (err: any) {
       const detail = err.response?.data?.detail ?? "Failed to save key.";
       setMessage({ type: "error", text: detail });

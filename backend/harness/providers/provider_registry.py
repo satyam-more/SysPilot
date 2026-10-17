@@ -30,17 +30,27 @@ _api_config: dict = {"provider": "openai", "model": "gpt-4o-mini", "key_ref": ""
 
 
 def _load_config() -> None:
-    """Load saved mode and config from DB on startup."""
+    """
+    Load saved mode and config from DB on startup.
+    If a key_ref is present and the key is still configured in the keystore,
+    default to API mode so the saved OpenAI key is used automatically.
+    """
     global _current_mode, _api_config
     conn = get_connection()
     row = conn.execute("SELECT * FROM provider_config WHERE id = 1").fetchone()
     if row:
-        _current_mode = row["persistent"] and row["key_ref"] and "api" or "offline"
+        provider_name = row["provider_name"] or "openai"
+        key_ref = row["key_ref"] or ""
         _api_config = {
-            "provider": row["provider_name"] or "openai",
-            "model": "gpt-4o-mini",  # model is not persisted separately in first release
-            "key_ref": row["key_ref"] or "",
+            "provider": provider_name,
+            "model": "gpt-4o-mini",  # model not persisted separately in first release
+            "key_ref": key_ref,
         }
+        # Prefer API mode when a usable key exists; otherwise offline.
+        if key_ref and key_is_configured(provider_name):
+            _current_mode = "api"
+        else:
+            _current_mode = "offline"
     logger.info("Provider registry loaded: mode=%s", _current_mode)
 
 
@@ -89,7 +99,8 @@ def set_mode(mode: Literal["offline", "api"]) -> None:
 
 def set_api_config(provider: str, model: str, key: str) -> dict:
     """
-    Save API key and update config.
+    Save API key and update config. Automatically switches to API mode so the
+    saved key is used immediately — the user does not need a separate toggle.
     Returns {"status": "saved", "masked_key": "sk-••••••••"}.
     """
     global _api_config, _current_mode
@@ -99,8 +110,10 @@ def set_api_config(provider: str, model: str, key: str) -> dict:
         "model": model,
         "key_ref": result.key_ref,
     }
+    # Auto-switch to API mode now that a key is configured.
+    _current_mode = "api"
     _persist()
-    return {"status": "saved", "masked_key": mask_key(key)}
+    return {"status": "saved", "masked_key": mask_key(key), "mode": "api"}
 
 
 def remove_api_key() -> None:

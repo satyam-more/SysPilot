@@ -7,6 +7,7 @@ events_fts in sync. Deleted content must not remain searchable.
 
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -15,6 +16,38 @@ from backend.memory.events import _transaction
 from backend.memory.models import Event
 
 logger = logging.getLogger(__name__)
+
+# Common words that add no search value and hurt recall if required.
+_STOPWORDS = {
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "about", "did", "do", "does", "i", "my", "me", "was",
+    "were", "is", "are", "what", "where", "when", "how", "why", "which",
+    "that", "this", "it", "any", "some", "from", "into", "while", "running",
+    "learn", "learning", "work", "working", "stop", "stopped", "encounter",
+    "encountered", "fully", "master", "mastered",
+}
+
+# Match word characters only; drop punctuation that would break FTS5 syntax.
+_WORD_RE = re.compile(r"[A-Za-z0-9_]+")
+
+
+def _build_fts_query(raw_query: str) -> str:
+    """
+    Turn a free-text query into a safe FTS5 OR expression.
+
+    - Extracts word tokens, strips punctuation (which can break FTS5 syntax).
+    - Removes stopwords so the query focuses on meaningful terms.
+    - Joins remaining terms with OR so events matching ANY key term surface,
+      ranked by FTS5 relevance. Falls back to all tokens if everything was a
+      stopword (so a query like "where" still returns something sensible).
+    """
+    tokens = _WORD_RE.findall(raw_query.lower())
+    if not tokens:
+        return ""
+    meaningful = [t for t in tokens if t not in _STOPWORDS and len(t) > 1]
+    terms = meaningful or tokens
+    # Quote each term to treat it as a literal (avoids FTS5 operator clashes).
+    return " OR ".join(f'"{t}"' for t in terms)
 
 
 def _row_to_event(row) -> Event:
@@ -44,9 +77,16 @@ def search_events(
     """
     conn = get_connection()
 
+    # Convert the free-text query into an FTS5 OR expression so a multi-word
+    # query matches events containing ANY of the key terms (ranked by
+    # relevance), instead of requiring all terms in one row (FTS5 default AND).
+    fts_query = _build_fts_query(query)
+    if not fts_query:
+        return []
+
     # FTS5 MATCH must reference the virtual table by name (not alias).
     # We get matching IDs first, then fetch full event rows.
-    fts_params: list = [query]
+    fts_params: list = [fts_query]
     fts_conditions = ["events_fts MATCH ?"]
 
     extra_conditions = ["e.privacy_status = 'permitted'"]

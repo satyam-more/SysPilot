@@ -145,19 +145,12 @@ class APIProvider(ModelProvider):
                 key_configured=False,
                 key_persistent=False,
             )
+        from backend.security.keystore import storage_is_persistent
+
+        persistent = storage_is_persistent(self._provider)
         try:
             _assert_approved_host(_VALIDATED_BASE_URL)
-            _ = get_key(f"{self._provider}_key")
-            from backend.security.keystore import storage_is_persistent
-            persistent = storage_is_persistent(self._provider)
-            return ProviderStatus(
-                mode="api",
-                model=self._model,
-                connected=True,
-                error=None,
-                key_configured=True,
-                key_persistent=persistent,
-            )
+            key = get_key(self._key_ref or f"{self._provider}_key")
         except KeyNotFoundError:
             return ProviderStatus(
                 mode="api",
@@ -166,14 +159,55 @@ class APIProvider(ModelProvider):
                 error="API key not found in store",
                 key_configured=False,
             )
-        except Exception as exc:
+
+        # Real validation: a lightweight GET /models call confirms the key
+        # actually works. No inference, no local compute — just a key check.
+        try:
+            async with httpx.AsyncClient(
+                base_url=_VALIDATED_BASE_URL,
+                follow_redirects=False,
+                timeout=httpx.Timeout(10.0),
+            ) as client:
+                resp = await client.get(
+                    "/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+        except httpx.TimeoutException:
             return ProviderStatus(
-                mode="api",
-                model=self._model,
-                connected=False,
-                error=str(exc),
-                key_configured=True,
+                mode="api", model=self._model, connected=False,
+                error="Connection to provider timed out",
+                key_configured=True, key_persistent=persistent,
             )
+        except httpx.HTTPError:
+            return ProviderStatus(
+                mode="api", model=self._model, connected=False,
+                error="Could not reach provider. Check your network connection.",
+                key_configured=True, key_persistent=persistent,
+            )
+        finally:
+            del key
+
+        if resp.status_code == 401:
+            return ProviderStatus(
+                mode="api", model=self._model, connected=False,
+                error="API key was rejected by the provider. Check the key is correct.",
+                key_configured=True, key_persistent=persistent,
+            )
+        if resp.status_code >= 400:
+            return ProviderStatus(
+                mode="api", model=self._model, connected=False,
+                error=f"Provider returned status {resp.status_code}",
+                key_configured=True, key_persistent=persistent,
+            )
+
+        return ProviderStatus(
+            mode="api",
+            model=self._model,
+            connected=True,
+            error=None,
+            key_configured=True,
+            key_persistent=persistent,
+        )
 
     def get_active_model(self) -> str:
         return self._model

@@ -90,9 +90,14 @@ def ingest_event(event: EventCreate) -> Event | None:
             ),
         )
         # Paired FTS write — must succeed or the whole transaction rolls back.
+        # Fold file_path into content_excerpt for indexing so path/project
+        # terms (e.g. "rust-project") are searchable alongside the excerpt.
+        fts_content = row.content_excerpt or ""
+        if row.file_path:
+            fts_content = f"{fts_content} {row.file_path}".strip()
         conn.execute(
             "INSERT INTO events_fts (id, title, content_excerpt) VALUES (?, ?, ?)",
-            (row.id, row.title or "", row.content_excerpt or ""),
+            (row.id, row.title or "", fts_content),
         )
 
     return row

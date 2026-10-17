@@ -18,15 +18,15 @@ SYNTHETIC_EVENTS: list[EventCreate] = [
     EventCreate(
         source="shell",
         event_type="command_run",
-        content_excerpt="cargo run",
-        metadata={"exit_code": 1, "cwd": "/home/user/rust-project"},
+        content_excerpt="cargo run in rust-project — failed with error, exit code 1",
+        metadata={"exit_code": 1, "cwd": "/home/user/rust-project", "status": "error"},
         evidence_type="observed",
     ),
     EventCreate(
         source="shell",
         event_type="command_run",
-        content_excerpt="cargo run",
-        metadata={"exit_code": 0, "cwd": "/home/user/rust-project"},
+        content_excerpt="cargo run in rust-project — succeeded, exit code 0",
+        metadata={"exit_code": 0, "cwd": "/home/user/rust-project", "status": "success"},
         evidence_type="observed",
     ),
     EventCreate(
@@ -40,8 +40,8 @@ SYNTHETIC_EVENTS: list[EventCreate] = [
     EventCreate(
         source="shell",
         event_type="command_run",
-        content_excerpt="cargo test",
-        metadata={"exit_code": 0, "cwd": "/home/user/rust-project"},
+        content_excerpt="cargo test in rust-project — succeeded, exit code 0",
+        metadata={"exit_code": 0, "cwd": "/home/user/rust-project", "status": "success"},
         evidence_type="observed",
     ),
     EventCreate(

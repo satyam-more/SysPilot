@@ -50,3 +50,4 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/*.tsbuildinfo
+tests/evaluation/results_*.json
