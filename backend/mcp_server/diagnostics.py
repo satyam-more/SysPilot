@@ -46,6 +46,7 @@ def get_system_health() -> dict:
     vm = psutil.virtual_memory()
     sm = psutil.swap_memory()
     disk = psutil.disk_usage("/")
+    disks = _get_disks()
 
     boot = datetime.fromtimestamp(psutil.boot_time(), tz=timezone.utc)
     uptime_seconds = (datetime.now(timezone.utc) - boot).total_seconds()
@@ -73,10 +74,44 @@ def get_system_health() -> dict:
             "free_gb": round(disk.free / 1024 / 1024 / 1024, 1),
             "percent": disk.percent,
         },
+        "disks": disks,
         "uptime_hours": round(uptime_seconds / 3600, 1),
         "temperatures": _get_temperatures(),
     }
     return health
+
+
+def _get_disks() -> list[dict]:
+    """
+    Usage for every real mounted filesystem (skips pseudo/virtual mounts like
+    /proc, /sys, snap loops, tmpfs). Gives the full picture, not just root.
+    """
+    skip_fstypes = {"proc", "sysfs", "tmpfs", "devtmpfs", "squashfs", "overlay",
+                    "cgroup", "cgroup2", "devpts", "mqueue", "debugfs",
+                    "tracefs", "fusectl", "configfs", "securityfs", "pstore",
+                    "autofs", "binfmt_misc", "hugetlbfs", "efivarfs", "ramfs"}
+    disks: list[dict] = []
+    seen: set[str] = set()
+    for part in psutil.disk_partitions(all=False):
+        if part.fstype in skip_fstypes or not part.fstype:
+            continue
+        if part.device in seen:
+            continue
+        seen.add(part.device)
+        try:
+            u = psutil.disk_usage(part.mountpoint)
+        except (PermissionError, OSError):
+            continue
+        disks.append({
+            "mount": part.mountpoint,
+            "device": part.device,
+            "fstype": part.fstype,
+            "total_gb": round(u.total / 1024 / 1024 / 1024, 1),
+            "used_gb": round(u.used / 1024 / 1024 / 1024, 1),
+            "free_gb": round(u.free / 1024 / 1024 / 1024, 1),
+            "percent": u.percent,
+        })
+    return disks
 
 
 def _get_temperatures() -> dict:
@@ -212,14 +247,14 @@ def check_system_issues() -> dict:
             "detail": "The system may become slow or start swapping heavily.",
         })
 
-    disk = psutil.disk_usage("/")
-    if disk.percent > 90:
-        issues.append({
-            "severity": "high",
-            "category": "disk",
-            "summary": f"Root disk is almost full ({disk.percent}% used)",
-            "detail": f"Only {round(disk.free / 1024 / 1024 / 1024, 1)} GB free.",
-        })
+    for d in _get_disks():
+        if d["percent"] > 90:
+            issues.append({
+                "severity": "high",
+                "category": "disk",
+                "summary": f"{d['mount']} is almost full ({d['percent']}% used)",
+                "detail": f"Only {d['free_gb']} GB free on {d['mount']}.",
+            })
 
     sm = psutil.swap_memory()
     if sm.percent > 80:
