@@ -91,3 +91,28 @@ def generate_fix_guide(problem: str) -> dict:
     """
     from backend.mcp_server import fixes
     return fixes.generate_fix_guide(problem)
+
+
+@mcp.tool()
+def propose_action(command: str, explanation: str = "") -> dict:
+    """
+    Stage a system command for the user to review before it runs. Classifies
+    the command as read_only, approval_required, or deny. Denied commands are
+    blocked and never staged. For allowed commands, returns a one-time
+    pending_id the user must confirm. ALWAYS use this before any command that
+    changes the system — never assume a command has run.
+    """
+    from backend.mcp_server import actions
+    return actions.propose_action(command, explanation)
+
+
+@mcp.tool()
+def confirm_and_apply(pending_id: str) -> dict:
+    """
+    Execute a command that was previously staged by propose_action, using its
+    pending_id. Only runs if the id matches an outstanding, non-expired
+    proposal. This is the explicit human-approval gate — call it only after the
+    user has agreed to run the staged command.
+    """
+    from backend.mcp_server import actions
+    return actions.confirm_and_apply(pending_id)
