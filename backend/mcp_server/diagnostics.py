@@ -320,3 +320,59 @@ def analyze_safe_to_close(limit: int = 20) -> dict:
         "critical": sum(1 for c in classified if c["safety"] == "critical"),
     }
     return {"processes": classified, "summary": summary}
+
+
+# ---------------------------------------------------------------------------
+# Battery
+# ---------------------------------------------------------------------------
+
+def get_battery() -> dict:
+    """
+    Battery status and health. Uses psutil for charge/plugged, and upower
+    (read-only) for design vs full capacity so we can estimate wear/health.
+    Returns {"present": False} on desktops with no battery.
+    """
+    result: dict = {"present": False}
+
+    try:
+        batt = psutil.sensors_battery()
+    except (AttributeError, OSError):
+        batt = None
+
+    if batt is not None:
+        result.update({
+            "present": True,
+            "percent": round(batt.percent, 1),
+            "plugged_in": bool(batt.power_plugged),
+        })
+        if batt.secsleft is not None and batt.secsleft >= 0 and not batt.power_plugged:
+            result["time_left_hours"] = round(batt.secsleft / 3600, 1)
+
+    # upower for capacity/health (energy-full vs energy-full-design).
+    dev = _run(["bash", "-c", "upower -e | grep -m1 BAT"]).strip()
+    if dev:
+        info = _run(["upower", "-i", dev])
+        parsed = {}
+        for line in info.splitlines():
+            if ":" in line:
+                k, _, v = line.strip().partition(":")
+                parsed[k.strip()] = v.strip()
+        result["present"] = True
+        if "state" in parsed:
+            result["state"] = parsed["state"]
+        if "vendor" in parsed:
+            result["vendor"] = parsed["vendor"]
+        # Health = full capacity / design capacity.
+        try:
+            full = float(parsed.get("energy-full", "0").split()[0])
+            design = float(parsed.get("energy-full-design", "0").split()[0])
+            if design > 0:
+                result["health_percent"] = round(full / design * 100, 1)
+                result["capacity_wh"] = round(full, 1)
+                result["design_capacity_wh"] = round(design, 1)
+        except (ValueError, IndexError):
+            pass
+        if "capacity" in parsed:
+            result["reported_capacity"] = parsed["capacity"]
+
+    return result

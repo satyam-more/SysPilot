@@ -68,6 +68,16 @@ def check_system_issues() -> dict:
 
 
 @mcp.tool()
+def get_battery() -> dict:
+    """
+    Get battery status and health: charge percent, charging state, and battery
+    health (current full capacity vs original design capacity, as a percent).
+    Read-only. Use this for any battery question — do not stage a command.
+    """
+    return diagnostics.get_battery()
+
+
+@mcp.tool()
 def analyze_safe_to_close(limit: int = 20) -> dict:
     """
     Analyse running processes and classify each as safe, caution, or critical

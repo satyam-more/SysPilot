@@ -43,6 +43,11 @@ _TOOLS: dict[str, dict[str, Any]] = {
         "description": "Scan for failed services, log errors, resource pressure.",
         "parameters": {"type": "object", "properties": {}},
     },
+    "get_battery": {
+        "fn": lambda **k: diagnostics.get_battery(),
+        "description": "Battery charge, charging state, and health (full vs design capacity). Use for any battery question — do not stage a command.",
+        "parameters": {"type": "object", "properties": {}},
+    },
     "analyze_safe_to_close": {
         "fn": lambda limit=20, **k: diagnostics.analyze_safe_to_close(limit=max(1, min(int(limit), 50))),
         "description": "Classify running processes safe/caution/critical to close.",
