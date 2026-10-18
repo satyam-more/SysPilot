@@ -49,8 +49,28 @@ def _looks_like_fake_tool_use(text: str) -> bool:
     return any(sign in low for sign in _FAKE_TOOL_SIGNS)
 
 
+def _tool_capable_provider():
+    """
+    The system agent needs reliable native tool-calling. Small local models
+    (qwen2.5:3b) can't do it — they fake tool use. So prefer the API provider
+    whenever a key is configured, regardless of the stored mode. Fall back to
+    the active provider only if no API key exists.
+    """
+    from backend.harness.providers.api_provider import APIProvider
+    from backend.security.keystore import key_is_configured
+
+    cfg = provider_registry._api_config
+    if key_is_configured(cfg.get("provider", "openai")):
+        return APIProvider(
+            provider=cfg.get("provider", "openai"),
+            model=cfg.get("model", ""),
+            key_ref=cfg.get("key_ref", ""),
+        )
+    return provider_registry.get_active_provider()
+
+
 async def _call_model(messages: list[dict]) -> dict:
-    provider = provider_registry.get_active_provider()
+    provider = _tool_capable_provider()
     response = await provider.generate(
         messages=messages, tools=agent_tools.tool_schemas(), max_tokens=2048
     )
