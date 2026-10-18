@@ -17,8 +17,14 @@ from backend.mcp_server import actions, diagnostics, sysagent
 router = APIRouter(prefix="/api/sys", tags=["sysagent"])
 
 
+class HistoryTurn(BaseModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    content: str = Field(max_length=4000)
+
+
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
+    history: list[HistoryTurn] = Field(default_factory=list, max_length=12)
 
 
 class ConfirmRequest(BaseModel):
@@ -31,7 +37,8 @@ async def ask(
     request: Request,
     _auth: None = Depends(validate_browser_request),
 ) -> dict:
-    return await sysagent.run_system_agent(body.question)
+    history = [{"role": t.role, "content": t.content} for t in body.history]
+    return await sysagent.run_system_agent(body.question, history=history)
 
 
 @router.post("/confirm")

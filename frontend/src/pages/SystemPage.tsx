@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { sysAPI } from "../api/client";
 import type { PendingAction, ConfirmResponse } from "../api/client";
 
@@ -33,8 +35,15 @@ export default function SystemPage() {
     setTurns((p) => [...p, { id, question: q, answer: null, tools: [], pending: null, confirmResult: null, error: null, loading: true }]);
     setQuestion("");
     setBusy(true);
+    // Build conversation history from completed turns so the agent has context.
+    const history = turns
+      .filter((t) => t.answer)
+      .flatMap((t) => [
+        { role: "user" as const, content: t.question },
+        { role: "assistant" as const, content: t.answer as string },
+      ]);
     try {
-      const r = await sysAPI.ask(q);
+      const r = await sysAPI.ask(q, history);
       update(id, {
         answer: r.data.answer,
         tools: r.data.tool_calls.map((t) => t.tool),
@@ -89,7 +98,11 @@ export default function SystemPage() {
                 <p className="ask-loading"><span className="spinner" /> Checking your system…</p>
               )}
               {turn.error && <p className="ask-error">{turn.error}</p>}
-              {turn.answer && <p className="ask-answer-text">{turn.answer}</p>}
+              {turn.answer && (
+                <div className="ask-answer-text markdown">
+                  <Markdown remarkPlugins={[remarkGfm]}>{turn.answer}</Markdown>
+                </div>
+              )}
 
               {turn.tools.length > 0 && (
                 <div className="ask-evidence">

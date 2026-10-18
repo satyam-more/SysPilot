@@ -173,9 +173,14 @@ export interface ConfirmResponse {
   message?: string;
 }
 
+export interface HistoryTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export const sysAPI = {
-  ask: (question: string) =>
-    api.post<SysAskResponse>("/api/sys/ask", { question }),
+  ask: (question: string, history: HistoryTurn[] = []) =>
+    api.post<SysAskResponse>("/api/sys/ask", { question, history }),
   confirm: (pending_id: string) =>
     api.post<ConfirmResponse>("/api/sys/confirm", { pending_id }),
 };

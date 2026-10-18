@@ -60,16 +60,25 @@ async def _call_model(messages: list[dict]) -> dict:
     return {"kind": "text", "text": (msg.get("reasoning") or "").strip()}
 
 
-async def run_system_agent(question: str) -> dict:
+async def run_system_agent(question: str, history: list[dict] | None = None) -> dict:
     """
     Answer a system-health question. Returns:
       {answer, tool_calls: [...], pending_action: {...}|None}
     pending_action is set when the agent staged a command needing confirmation.
+
+    `history` is prior [{role, content}] turns (user/assistant text only) so
+    the model keeps conversation context across questions.
     """
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": question},
-    ]
+    messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # Include recent prior turns (text only) for context. Cap to keep the
+    # context small and tokens cheap.
+    if history:
+        for turn in history[-6:]:
+            role = turn.get("role")
+            content = (turn.get("content") or "").strip()
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": question})
     tool_log: list[dict] = []
     pending_action: dict | None = None
 
