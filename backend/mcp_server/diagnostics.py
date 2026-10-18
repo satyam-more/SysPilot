@@ -235,3 +235,53 @@ def check_system_issues() -> dict:
         "issues": issues,
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Safe-to-close analysis
+# ---------------------------------------------------------------------------
+
+# Processes that must never be killed — doing so crashes the session or OS.
+_CRITICAL_PROCESSES = {
+    "systemd", "init", "kthreadd", "dbus-daemon", "dbus-broker",
+    "gnome-shell", "gnome-session-binary", "Xorg", "Xwayland", "wayland",
+    "gdm", "gdm-session-worker", "pipewire", "wireplumber", "pulseaudio",
+    "NetworkManager", "systemd-logind", "systemd-journald", "polkitd",
+    "kwin_wayland", "plasmashell", "mutter", "sddm",
+}
+
+# User-facing apps that are generally safe to close (data-loss risk only if
+# unsaved work). Anything not critical and not a kernel thread falls here.
+_KNOWN_SAFE_APPS = {
+    "chrome", "firefox", "code", "kiro", "slack", "discord", "spotify",
+    "telegram-desktop", "thunderbird", "libreoffice", "obsidian", "vlc",
+}
+
+
+def analyze_safe_to_close(limit: int = 20) -> dict:
+    """
+    Classify top running processes by how safe they are to close:
+      - 'safe'     : user apps; closing only risks unsaved work
+      - 'caution'  : unknown/background; may belong to something you need
+      - 'critical' : system/session processes; closing can crash the OS/session
+    """
+    procs = list_running_processes(limit=limit, sort_by="memory")["processes"]
+    classified = []
+    for p in procs:
+        name = (p["name"] or "").lower()
+        if name in _CRITICAL_PROCESSES or name.startswith("systemd"):
+            level, reason = "critical", "System/session process — closing may crash your desktop or OS."
+        elif name in _KNOWN_SAFE_APPS:
+            level, reason = "safe", "User application — safe to close; save your work first."
+        elif name.startswith("[") or name in ("kthreadd", "ksoftirqd", "migration"):
+            level, reason = "critical", "Kernel thread — cannot and must not be closed."
+        else:
+            level, reason = "caution", "Background/unknown process — verify what it belongs to before closing."
+        classified.append({**p, "safety": level, "reason": reason})
+
+    summary = {
+        "safe": sum(1 for c in classified if c["safety"] == "safe"),
+        "caution": sum(1 for c in classified if c["safety"] == "caution"),
+        "critical": sum(1 for c in classified if c["safety"] == "critical"),
+    }
+    return {"processes": classified, "summary": summary}

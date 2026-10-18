@@ -28,3 +28,11 @@ def test_check_issues_structure():
     assert "issue_count" in i and isinstance(i["issues"], list)
     for issue in i["issues"]:
         assert issue["severity"] in ("high", "medium", "low")
+
+
+def test_safe_to_close_classification():
+    r = d.analyze_safe_to_close(limit=10)
+    assert set(r["summary"]) == {"safe", "caution", "critical"}
+    for p in r["processes"]:
+        assert p["safety"] in ("safe", "caution", "critical")
+        assert p["reason"]

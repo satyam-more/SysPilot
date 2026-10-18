@@ -65,3 +65,16 @@ def check_system_issues() -> dict:
     Read-only. Use this for "what's wrong with my system / any problems".
     """
     return diagnostics.check_system_issues()
+
+
+@mcp.tool()
+def analyze_safe_to_close(limit: int = 20) -> dict:
+    """
+    Analyse running processes and classify each as safe, caution, or critical
+    to close. 'safe' = user apps (only unsaved-work risk); 'caution' =
+    background/unknown; 'critical' = system/session/kernel processes that must
+    not be closed. Read-only — does not close anything. Use this for "which
+    apps can I safely close".
+    """
+    limit = max(1, min(limit, 50))
+    return diagnostics.analyze_safe_to_close(limit=limit)
