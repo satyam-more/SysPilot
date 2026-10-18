@@ -25,3 +25,6 @@ pywebview==6.2.1
 qtpy==2.4.3
 PyQt6==6.11.0
 PyQt6-WebEngine==6.11.0
+
+# MCP server (Streamable HTTP) for Alexa+ integration
+mcp==2.3.0
