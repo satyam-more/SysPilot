@@ -33,6 +33,22 @@ CRITICAL RULES:
 Available tools let you read system health, list processes and startup apps, find issues, judge what's safe to close, produce fix guides, and stage commands for approval."""
 
 
+_FAKE_TOOL_SIGNS = (
+    "tool_read", "tool_", "$system", "please run", "run the command",
+    "run the following", "i will use the", "let me check that for you",
+    "run this command", "execute the command",
+)
+
+
+def _looks_like_fake_tool_use(text: str) -> bool:
+    """
+    Heuristic: the model is pretending to use a tool (writing tool-ish text or
+    asking the user to run a command) instead of actually calling one.
+    """
+    low = text.lower()
+    return any(sign in low for sign in _FAKE_TOOL_SIGNS)
+
+
 async def _call_model(messages: list[dict]) -> dict:
     provider = provider_registry.get_active_provider()
     response = await provider.generate(
@@ -81,6 +97,7 @@ async def run_system_agent(question: str, history: list[dict] | None = None) -> 
     messages.append({"role": "user", "content": question})
     tool_log: list[dict] = []
     pending_action: dict | None = None
+    forced_tool_nudge = False
 
     for i in range(MAX_ITERATIONS):
         result = None
@@ -93,8 +110,26 @@ async def run_system_agent(question: str, history: list[dict] | None = None) -> 
                     raise RuntimeError("Model unreachable after retries.") from exc
 
         if result["kind"] == "text":
+            text = result["text"]
+
+            # Guard: some weak models (small local LLMs) don't emit real tool
+            # calls — they write fake tool-ish text ("tool_read_system_health",
+            # "please run `free`") without calling anything. If no tool has run
+            # yet and the text looks like that, nudge once to force a real call.
+            if not tool_log and _looks_like_fake_tool_use(text) and not forced_tool_nudge:
+                forced_tool_nudge = True
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Do not describe commands or ask me to run them. Use "
+                        "your available tools directly to get the real data, "
+                        "then answer from the tool results."
+                    ),
+                })
+                continue
+
             return {
-                "answer": result["text"],
+                "answer": text,
                 "tool_calls": tool_log,
                 "pending_action": pending_action,
                 "iterations": i + 1,
