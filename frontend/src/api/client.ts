@@ -150,6 +150,36 @@ export const askAPI = {
     api.post<AskResponse>("/api/ask", { question, context_hint: contextHint }),
 };
 
+export interface PendingAction {
+  pending_id: string;
+  command: string;
+  classification: "read_only" | "approval_required" | "deny";
+  message: string;
+}
+
+export interface SysAskResponse {
+  answer: string;
+  tool_calls: Array<{ tool: string; input: Record<string, unknown> }>;
+  pending_action: PendingAction | null;
+  iterations: number;
+}
+
+export interface ConfirmResponse {
+  status: "ok" | "error";
+  command?: string;
+  exit_code?: number;
+  stdout?: string;
+  stderr?: string;
+  message?: string;
+}
+
+export const sysAPI = {
+  ask: (question: string) =>
+    api.post<SysAskResponse>("/api/sys/ask", { question }),
+  confirm: (pending_id: string) =>
+    api.post<ConfirmResponse>("/api/sys/confirm", { pending_id }),
+};
+
 export interface TrackingStatus {
   collector: "running" | "stopped";
   watched_directories: string[];

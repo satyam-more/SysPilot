@@ -22,8 +22,10 @@ from backend.api.routes.model_settings import router as model_router
 from backend.api.routes.privacy import router as privacy_router
 from backend.api.routes.tracking import router as tracking_router
 from backend.api.routes.browsers import router as browsers_router
+from backend.api.routes.sysagent import router as sysagent_router
 from backend.collectors.filesystem import filesystem_collector
 from backend.collectors.browser_history import browser_collector
+from backend.mcp_server.server import get_mcp_app
 from backend.database.db import init_db
 from backend.harness.providers import provider_registry
 from backend.privacy.controller import privacy_controller
@@ -71,7 +73,16 @@ async def lifespan(app: FastAPI):
     browser_collector.start()
     logger.info("Collectors initialised.")
 
-    yield
+    # Start the mounted MCP server's session manager via its lifespan.
+    # The manager can only run once per instance; under repeated TestClient
+    # setups it may already be running, which is harmless — fall through.
+    try:
+        async with _mcp_app.router.lifespan_context(_mcp_app):
+            logger.info("MCP server mounted at /mcp-server/mcp")
+            yield
+    except RuntimeError as exc:
+        logger.warning("MCP lifespan not re-entered: %s", exc)
+        yield
 
     # Shutdown — stop collectors cleanly.
     filesystem_collector.stop()
@@ -102,6 +113,14 @@ app.include_router(model_router)
 app.include_router(ask_router)
 app.include_router(tracking_router)
 app.include_router(browsers_router)
+app.include_router(sysagent_router)
+
+# Mount the MCP server (Streamable HTTP) at /mcp-server/mcp so Alexa+ / MCP
+# clients can reach the system-health tools. Built fresh per app instance
+# (the session manager can only run once) and its lifespan is chained into the
+# main lifespan below.
+_mcp_app = get_mcp_app(path="/mcp")
+app.mount("/mcp-server", _mcp_app)
 
 
 @app.get("/api/dev-token")

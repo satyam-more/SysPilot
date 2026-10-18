@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import SettingsPage from "./pages/SettingsPage";
-import AskPage from "./pages/AskPage";
+import SystemPage from "./pages/SystemPage";
 
-type Page = "settings" | "ask" | "timeline";
+type Page = "system" | "settings";
 
 export default function App() {
-  const [page, setPage] = useState<Page>("settings");
+  const [page, setPage] = useState<Page>("system");
   const [sessionExpired, setSessionExpired] = useState(false);
 
   useEffect(() => {
@@ -18,37 +18,24 @@ export default function App() {
     <div className="app">
       {sessionExpired && (
         <div className="session-banner">
-          Session expired — restart the TrailBack backend to reconnect.
+          Session expired — restart the backend to reconnect.
         </div>
       )}
 
       <div className="navbar">
-        <h1>TrailBack</h1>
+        <h1>System Health Assistant</h1>
         <nav>
-          <a
-            className={page === "settings" ? "active" : ""}
-            onClick={() => setPage("settings")}
-          >
+          <a className={page === "system" ? "active" : ""} onClick={() => setPage("system")}>
+            Assistant
+          </a>
+          <a className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}>
             Settings
-          </a>
-          <a
-            className={page === "ask" ? "active" : ""}
-            onClick={() => setPage("ask")}
-          >
-            Ask
-          </a>
-          <a
-            className={page === "timeline" ? "active" : ""}
-            onClick={() => setPage("timeline")}
-          >
-            Timeline
           </a>
         </nav>
       </div>
 
+      {page === "system" && <SystemPage />}
       {page === "settings" && <SettingsPage />}
-      {page === "ask" && <AskPage />}
-      {page === "timeline" && <div className="card"><h2>Timeline — coming in Phase 10</h2></div>}
     </div>
   );
 }
