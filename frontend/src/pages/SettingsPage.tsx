@@ -1,18 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { modelAPI, privacyAPI, trackingAPI, browsersAPI } from "../api/client";
-import type {
-  ModelStatus,
-  TrackingStatus,
-  BrowserStatus,
-} from "../api/client";
+import { modelAPI } from "../api/client";
+import type { ModelStatus } from "../api/client";
 
-// Models available per provider. Keep in sync with SUPPORTED_PROVIDERS
-// in backend/harness/providers/provider_registry.py.
+// Models available per provider.
 const PROVIDER_MODELS: Record<string, string[]> = {
-  groq: [
-    "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
-  ],
+  groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b"],
   openai: ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"],
 };
 
@@ -26,7 +18,7 @@ export default function SettingsPage() {
       const resp = await modelAPI.getStatus();
       setStatus(resp.data);
       setError(null);
-    } catch (err) {
+    } catch {
       setError("Could not reach backend. Is it running on port 8000?");
     } finally {
       setLoading(false);
@@ -46,276 +38,12 @@ export default function SettingsPage() {
       {error && <div className="notice error">{error}</div>}
       <ModelModeSection status={status} onUpdate={fetchStatus} />
       <ApiKeySection status={status} onUpdate={fetchStatus} />
-      <TrackingSection />
-      <BrowsersSection />
-      <PrivacySection />
     </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Browser History Tracking
-// ---------------------------------------------------------------------------
-
-function BrowsersSection() {
-  const [status, setStatus] = useState<BrowserStatus | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [domainsText, setDomainsText] = useState("");
-  const [saved, setSaved] = useState(false);
-
-  const refresh = async () => {
-    try {
-      const resp = await browsersAPI.getStatus();
-      setStatus(resp.data);
-      setDomainsText(resp.data.excluded_domains.join("\n"));
-    } catch {
-      /* ignore */
-    }
-  };
-
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  const toggleBrowser = async (name: string, enable: boolean) => {
-    if (!status) return;
-    const current = status.browsers.filter((b) => b.enabled).map((b) => b.name);
-    const next = enable
-      ? [...current, name]
-      : current.filter((n) => n !== name);
-    setBusy(true);
-    try {
-      await browsersAPI.setEnabled(next);
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const saveDomains = async () => {
-    setBusy(true);
-    setSaved(false);
-    try {
-      const domains = domainsText
-        .split("\n")
-        .map((d) => d.trim())
-        .filter(Boolean);
-      await browsersAPI.setExcludedDomains(domains);
-      setSaved(true);
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const browsers = status?.browsers ?? [];
-  const running = status?.collector === "running";
-
-  return (
-    <div className="card">
-      <h2>Browser History</h2>
-      <p style={{ marginBottom: 12, color: "var(--text-muted)" }}>
-        TrailBack can read your browser history to remember pages you visited.
-        Nothing is sent anywhere — it reads the local history file only for
-        browsers you enable below.
-      </p>
-
-      {browsers.length === 0 ? (
-        <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-          No supported browsers detected on this machine.
-        </p>
-      ) : (
-        <>
-          <div style={{ marginBottom: 14 }}>
-            {browsers.map((b) => (
-              <label
-                key={b.name}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 0",
-                  borderBottom: "1px solid var(--border)",
-                  fontSize: 14,
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={b.enabled}
-                  disabled={busy}
-                  onChange={(e) => toggleBrowser(b.name, e.target.checked)}
-                  style={{ width: "auto" }}
-                />
-                <span>{b.name}</span>
-                {b.enabled && running && (
-                  <span className="status-badge online" style={{ marginLeft: "auto" }}>
-                    <span className="status-dot" />
-                    Tracking
-                  </span>
-                )}
-              </label>
-            ))}
-          </div>
-
-          <div className="form-row">
-            <label>Excluded domains (one per line — never recorded)</label>
-            <textarea
-              value={domainsText}
-              onChange={(e) => {
-                setDomainsText(e.target.value);
-                setSaved(false);
-              }}
-              rows={4}
-              placeholder="mail.google.com&#10;web.whatsapp.com"
-              style={{ fontFamily: "var(--mono)", fontSize: 13 }}
-            />
-          </div>
-          <div className="form-actions">
-            <button className="btn-primary" disabled={busy} onClick={saveDomains}>
-              Save exclusions
-            </button>
-            {saved && (
-              <span style={{ color: "var(--success)", fontSize: 13, alignSelf: "center" }}>
-                Saved
-              </span>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Activity Tracking
-// ---------------------------------------------------------------------------
-
-function TrackingSection() {
-  const [status, setStatus] = useState<TrackingStatus | null>(null);
-  const [newPath, setNewPath] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = async () => {
-    try {
-      const resp = await trackingAPI.getStatus();
-      setStatus(resp.data);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  const addDir = async () => {
-    const p = newPath.trim();
-    if (!p) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const resp = await trackingAPI.addDirectory(p);
-      setStatus(resp.data);
-      setNewPath("");
-    } catch (err: any) {
-      setError(err.response?.data?.detail ?? "Could not add directory.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removeDir = async (path: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const resp = await trackingAPI.removeDirectory(path);
-      setStatus(resp.data);
-    } catch {
-      setError("Could not remove directory.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const running = status?.collector === "running";
-  const dirs = status?.watched_directories ?? [];
-
-  return (
-    <div className="card">
-      <h2>Activity Tracking</h2>
-      <p style={{ marginBottom: 12, color: "var(--text-muted)" }}>
-        TrailBack records file activity in the folders below. Nothing is
-        recorded in folders you don't add here.
-      </p>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-        <span className={`status-badge ${running ? "online" : "offline"}`}>
-          <span className="status-dot" />
-          {running ? "Watching" : dirs.length ? "Idle" : "No folders"}
-        </span>
-        {running && (
-          <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
-            {dirs.length} folder{dirs.length === 1 ? "" : "s"} tracked
-          </span>
-        )}
-      </div>
-
-      {error && <div className="notice error">{error}</div>}
-
-      {dirs.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          {dirs.map((d) => (
-            <div
-              key={d}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "8px 0",
-                borderBottom: "1px solid var(--border)",
-                fontSize: 13,
-              }}
-            >
-              <span style={{ fontFamily: "var(--mono)", wordBreak: "break-all" }}>
-                {d}
-              </span>
-              <button
-                className="btn-secondary"
-                style={{ padding: "4px 10px", fontSize: 12 }}
-                disabled={busy}
-                onClick={() => removeDir(d)}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="form-row">
-        <label>Add a folder to track</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            type="text"
-            value={newPath}
-            onChange={(e) => setNewPath(e.target.value)}
-            placeholder="/home/you/projects/my-app"
-            style={{ flex: 1 }}
-            onKeyDown={(e) => e.key === "Enter" && addDir()}
-          />
-          <button className="btn-primary" disabled={busy || !newPath.trim()} onClick={addDir}>
-            Add
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Model Mode Selector
+// Model Mode
 // ---------------------------------------------------------------------------
 
 function ModelModeSection({
@@ -333,7 +61,7 @@ function ModelModeSection({
       await modelAPI.setMode(mode);
       await onUpdate();
     } catch {
-      // error handled by parent refresh
+      /* handled by refresh */
     } finally {
       setSwitching(false);
     }
@@ -344,22 +72,27 @@ function ModelModeSection({
 
   return (
     <div className="card">
-      <h2>Model Mode</h2>
+      <h2>Model</h2>
+      <p style={{ marginBottom: 14, color: "var(--text-muted)" }}>
+        The assistant uses an AI model to reason over your system data. API
+        mode (Groq, free) is recommended — it reliably calls the diagnostic
+        tools. Offline mode is experimental.
+      </p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-        <button
-          className={mode === "offline" ? "btn-primary" : "btn-secondary"}
-          disabled={switching}
-          onClick={() => setMode("offline")}
-        >
-          Offline (Ollama)
-        </button>
         <button
           className={mode === "api" ? "btn-primary" : "btn-secondary"}
           disabled={switching}
           onClick={() => setMode("api")}
         >
-          API Provider
+          API Provider (recommended)
+        </button>
+        <button
+          className={mode === "offline" ? "btn-primary" : "btn-secondary"}
+          disabled={switching}
+          onClick={() => setMode("offline")}
+        >
+          Offline (experimental)
         </button>
       </div>
 
@@ -373,18 +106,13 @@ function ModelModeSection({
             Model: {status.model}
           </span>
         )}
-        {status?.error && (
-          <span style={{ color: "var(--danger)", fontSize: 13 }}>
-            {status.error}
-          </span>
-        )}
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// API Key Form
+// API Key
 // ---------------------------------------------------------------------------
 
 function ApiKeySection({
@@ -411,31 +139,20 @@ function ApiKeySection({
     try {
       const resp = await modelAPI.saveApiKey(provider, model, key);
       setKey("");
-      setMessage({
-        type: "success",
-        text: `Key saved (${resp.data.masked_key}). Switched to API mode. Testing connection…`,
-      });
+      setMessage({ type: "success", text: `Key saved (${resp.data.masked_key}). Testing connection…` });
       await onUpdate();
-      // Auto-verify the key works right after saving.
       try {
         const test = await modelAPI.testConnection();
-        if (test.data.success) {
-          setMessage({
-            type: "success",
-            text: `Connected to ${test.data.model}. API mode is active.`,
-          });
-        } else {
-          setMessage({
-            type: "error",
-            text: test.data.error ?? "Key saved but connection test failed.",
-          });
-        }
+        setMessage(
+          test.data.success
+            ? { type: "success", text: `Connected to ${test.data.model}. API mode is active.` }
+            : { type: "error", text: test.data.error ?? "Key saved but connection test failed." }
+        );
       } catch {
         /* status refresh already done */
       }
     } catch (err: any) {
-      const detail = err.response?.data?.detail ?? "Failed to save key.";
-      setMessage({ type: "error", text: detail });
+      setMessage({ type: "error", text: err.response?.data?.detail ?? "Failed to save key." });
     } finally {
       setSaving(false);
     }
@@ -460,22 +177,13 @@ function ApiKeySection({
     setMessage(null);
     try {
       const resp = await modelAPI.testConnection();
-      if (resp.data.success) {
-        setMessage({
-          type: "success",
-          text: `Connection successful — model: ${resp.data.model}`,
-        });
-      } else {
-        setMessage({
-          type: "error",
-          text: resp.data.error ?? "Connection failed.",
-        });
-      }
+      setMessage(
+        resp.data.success
+          ? { type: "success", text: `Connection successful — model: ${resp.data.model}` }
+          : { type: "error", text: resp.data.error ?? "Connection failed." }
+      );
     } catch (err: any) {
-      setMessage({
-        type: "error",
-        text: err.response?.data?.detail ?? "Could not test connection.",
-      });
+      setMessage({ type: "error", text: err.response?.data?.detail ?? "Could not test connection." });
     } finally {
       setTesting(false);
     }
@@ -487,8 +195,8 @@ function ApiKeySection({
 
       {keyConfigured && !keyPersistent && (
         <div className="notice warning">
-          API key is stored in memory only and will be lost when TrailBack
-          restarts. This usually means your OS keyring is unavailable.
+          API key is stored in memory only and will be lost on restart (OS
+          keyring unavailable).
         </div>
       )}
 
@@ -500,18 +208,10 @@ function ApiKeySection({
             An API key is configured.
           </p>
           <div className="form-actions">
-            <button
-              className="btn-secondary"
-              disabled={testing}
-              onClick={testConnection}
-            >
+            <button className="btn-secondary" disabled={testing} onClick={testConnection}>
               {testing ? "Testing..." : "Test Connection"}
             </button>
-            <button
-              className="btn-danger"
-              disabled={saving}
-              onClick={deleteKey}
-            >
+            <button className="btn-danger" disabled={saving} onClick={deleteKey}>
               Remove Key
             </button>
           </div>
@@ -525,7 +225,6 @@ function ApiKeySection({
               onChange={(e) => {
                 const p = e.target.value;
                 setProvider(p);
-                // Reset model to the new provider's first option.
                 setModel(PROVIDER_MODELS[p][0]);
               }}
             >
@@ -537,9 +236,7 @@ function ApiKeySection({
             <label>Model</label>
             <select value={model} onChange={(e) => setModel(e.target.value)}>
               {PROVIDER_MODELS[provider].map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
+                <option key={m} value={m}>{m}</option>
               ))}
             </select>
           </div>
@@ -553,69 +250,12 @@ function ApiKeySection({
             />
           </div>
           <div className="form-actions">
-            <button
-              className="btn-primary"
-              disabled={saving || !key.trim()}
-              onClick={saveKey}
-            >
+            <button className="btn-primary" disabled={saving || !key.trim()} onClick={saveKey}>
               {saving ? "Saving..." : "Save Key"}
             </button>
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Privacy Toggle
-// ---------------------------------------------------------------------------
-
-function PrivacySection() {
-  const [privacyState, setPrivacyState] = useState<"active" | "paused">("active");
-  const [toggling, setToggling] = useState(false);
-
-  useEffect(() => {
-    privacyAPI.status().then((r) => setPrivacyState(r.data.state)).catch(() => {});
-  }, []);
-
-  const toggle = async () => {
-    setToggling(true);
-    try {
-      if (privacyState === "active") {
-        await privacyAPI.pause();
-        setPrivacyState("paused");
-      } else {
-        await privacyAPI.resume();
-        setPrivacyState("active");
-      }
-    } catch {
-      // ignore
-    } finally {
-      setToggling(false);
-    }
-  };
-
-  return (
-    <div className="card">
-      <h2>Privacy Mode</h2>
-      <p style={{ marginBottom: 12, color: "var(--text-muted)" }}>
-        When active, all event collection is paused. Existing data is not
-        deleted but no new events are recorded.
-      </p>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span className={`status-badge ${privacyState === "paused" ? "error" : "online"}`}>
-          <span className="status-dot" />
-          {privacyState === "paused" ? "Paused" : "Active"}
-        </span>
-        <button
-          className={privacyState === "active" ? "btn-danger" : "btn-primary"}
-          disabled={toggling}
-          onClick={toggle}
-        >
-          {privacyState === "active" ? "Pause Recording" : "Resume Recording"}
-        </button>
-      </div>
     </div>
   );
 }
