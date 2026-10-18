@@ -171,6 +171,7 @@ export interface ConfirmResponse {
   stdout?: string;
   stderr?: string;
   message?: string;
+  insight?: string;
 }
 
 export interface HistoryTurn {

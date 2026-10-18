@@ -193,3 +193,36 @@ async def run_system_agent(question: str, history: list[dict] | None = None) -> 
         "pending_action": pending_action,
         "iterations": MAX_ITERATIONS,
     }
+
+
+async def interpret_command_result(command: str, stdout: str, stderr: str, exit_code: int) -> str:
+    """
+    After a command runs, produce a short plain-language insight so a
+    non-technical user understands the result. No tools — just explanation.
+    """
+    output = (stdout or "").strip()[:3000]
+    err = (stderr or "").strip()[:1000]
+    prompt = (
+        f"The user approved and ran this command:\n`{command}`\n\n"
+        f"Exit code: {exit_code}\n"
+        f"Output:\n{output or '(no output)'}\n"
+        f"{('Errors:\n' + err) if err else ''}\n\n"
+        "Explain the result to a non-technical user in 2-4 short sentences: "
+        "what it shows, the key takeaway, and whether anything needs attention. "
+        "Use plain language, no raw field dumps. If it looks healthy, say so plainly."
+    )
+    messages = [
+        {"role": "system", "content": "You explain command results in simple, reassuring, plain language."},
+        {"role": "user", "content": prompt},
+    ]
+    provider = _tool_capable_provider()
+    try:
+        resp = await provider.generate(messages=messages, max_tokens=400)
+    except Exception:  # noqa: BLE001
+        return ""
+    msg: dict = {}
+    if "message" in resp and isinstance(resp["message"], dict):
+        msg = resp["message"]
+    elif "choices" in resp and resp["choices"]:
+        msg = resp["choices"][0].get("message", {})
+    return (msg.get("content") or msg.get("reasoning") or "").strip()

@@ -167,13 +167,27 @@ function CommandResult({ result }: { result: ConfirmResponse }) {
   return (
     <div className={`notice ${ok ? "success" : "error"}`} style={{ marginTop: 14 }}>
       <div style={{ fontWeight: 600, marginBottom: 6 }}>
-        {ok ? `Done (exit ${result.exit_code})` : "Failed"}
+        {ok ? "Done" : "Failed"}
       </div>
       {result.message && <p>{result.message}</p>}
+
+      {/* Lead with the plain-language insight. */}
+      {result.insight && (
+        <div className="markdown" style={{ marginBottom: 8 }}>
+          <Markdown remarkPlugins={[remarkGfm]}>{result.insight}</Markdown>
+        </div>
+      )}
+
+      {/* Raw output tucked into a collapsible section. */}
       {result.stdout && (
-        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, marginTop: 6, maxHeight: 200, overflow: "auto" }}>
-          {result.stdout}
-        </pre>
+        <details style={{ marginTop: 6 }}>
+          <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
+            Show raw output
+          </summary>
+          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, marginTop: 6, maxHeight: 220, overflow: "auto" }}>
+            {result.stdout}
+          </pre>
+        </details>
       )}
       {result.stderr && (
         <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "var(--danger)", marginTop: 6 }}>

@@ -42,12 +42,23 @@ async def ask(
 
 
 @router.post("/confirm")
-def confirm(
+async def confirm(
     body: ConfirmRequest,
     request: Request,
     _auth: None = Depends(validate_browser_request),
 ) -> dict:
-    return actions.confirm_and_apply(body.pending_id)
+    result = actions.confirm_and_apply(body.pending_id)
+    # After running, interpret the output into a plain-language insight so the
+    # user doesn't have to read raw command output.
+    if result.get("status") == "ok":
+        insight = await sysagent.interpret_command_result(
+            command=result.get("command", ""),
+            stdout=result.get("stdout", ""),
+            stderr=result.get("stderr", ""),
+            exit_code=result.get("exit_code", 0),
+        )
+        result["insight"] = insight
+    return result
 
 
 @router.get("/health")
