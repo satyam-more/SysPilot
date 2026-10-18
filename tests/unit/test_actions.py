@@ -51,3 +51,17 @@ def test_pending_id_single_use():
 
 def test_unknown_id_rejected():
     assert a.confirm_and_apply("deadbeef")["status"] == "error"
+
+
+def test_needs_interactive_input():
+    assert a.needs_interactive_input("sudo systemctl stop x") is True
+    assert a.needs_interactive_input("sudo -n apt clean") is False
+    assert a.needs_interactive_input("free -h") is False
+    assert a.needs_interactive_input("ssh host") is True
+
+
+def test_sudo_command_returns_run_in_terminal():
+    p = a.propose_action("sudo systemctl stop tor.service")
+    r = a.confirm_and_apply(p["pending_id"])
+    assert r["status"] == "run_in_terminal"
+    assert r["command"] == "sudo systemctl stop tor.service"

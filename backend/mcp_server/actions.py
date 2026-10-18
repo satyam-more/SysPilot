@@ -140,10 +140,36 @@ def propose_action(command: str, explanation: str = "") -> dict:
     }
 
 
+def needs_interactive_input(command: str) -> bool:
+    """
+    True if the command would prompt for input we can't provide headlessly
+    (most commonly a sudo password). Such commands must be run by the user in
+    their own terminal — running them here would just hang until timeout.
+    """
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return False
+    # sudo without -n/--non-interactive will prompt for a password.
+    if "sudo" in tokens:
+        if "-n" not in tokens and "--non-interactive" not in tokens:
+            return True
+    # Other common interactive leaders.
+    interactive_leaders = {"su", "passwd", "ssh", "ssh-keygen", "vi", "vim", "nano", "less", "top", "htop"}
+    first = tokens[0] if tokens else ""
+    if first in interactive_leaders:
+        return True
+    return False
+
+
 def confirm_and_apply(pending_id: str) -> dict:
     """
     Run a previously proposed command, only if pending_id matches an
     outstanding, non-expired proposal. Single-use.
+
+    Commands that need interactive input (e.g. a sudo password) are NOT run —
+    we return a 'run_in_terminal' result with the exact command for the user
+    to run themselves, since we can't supply the password headlessly.
     """
     entry = _pending.pop(pending_id, None)
     if entry is None:
@@ -152,13 +178,26 @@ def confirm_and_apply(pending_id: str) -> dict:
     if time.monotonic() - entry["created"] > _PROPOSAL_TTL:
         return {"status": "error", "message": "This proposal expired. Request it again."}
 
+    command = entry["command"]
+
     # Re-classify at execution time (defence against tampering).
-    if classify_command(entry["command"]) == DENY:
+    if classify_command(command) == DENY:
         return {"status": "error", "message": "Command is blocked for safety."}
+
+    # Privileged/interactive commands can't run headlessly — hand to the user.
+    if needs_interactive_input(command):
+        return {
+            "status": "run_in_terminal",
+            "command": command,
+            "message": (
+                "This command needs administrator rights (a password), which "
+                "can't be entered here. Copy it and run it in your terminal:"
+            ),
+        }
 
     try:
         result = subprocess.run(
-            entry["command"],
+            command,
             shell=True,
             capture_output=True,
             text=True,
@@ -167,7 +206,7 @@ def confirm_and_apply(pending_id: str) -> dict:
         )
         return {
             "status": "ok",
-            "command": entry["command"],
+            "command": command,
             "exit_code": result.returncode,
             "stdout": result.stdout[-4000:],
             "stderr": result.stderr[-2000:],

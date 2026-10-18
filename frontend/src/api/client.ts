@@ -165,7 +165,7 @@ export interface SysAskResponse {
 }
 
 export interface ConfirmResponse {
-  status: "ok" | "error";
+  status: "ok" | "error" | "run_in_terminal";
   command?: string;
   exit_code?: number;
   stdout?: string;

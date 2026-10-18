@@ -163,6 +163,25 @@ function ConfirmationGate({ pending, busy, onConfirm, onCancel }: {
 }
 
 function CommandResult({ result }: { result: ConfirmResponse }) {
+  // Command needs to be run by the user in their own terminal (e.g. sudo).
+  if (result.status === "run_in_terminal") {
+    const copy = () => navigator.clipboard?.writeText(result.command ?? "");
+    return (
+      <div className="notice warning" style={{ marginTop: 14 }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Run this in your terminal</div>
+        {result.message && <p style={{ marginBottom: 8 }}>{result.message}</p>}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <code style={{ flex: 1, background: "var(--bg)", padding: "8px 12px", borderRadius: 6, fontFamily: "var(--mono)", wordBreak: "break-all" }}>
+            {result.command}
+          </code>
+          <button className="btn-secondary" style={{ flexShrink: 0 }} onClick={copy}>
+            Copy
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const ok = result.status === "ok";
   return (
     <div className={`notice ${ok ? "success" : "error"}`} style={{ marginTop: 14 }}>
