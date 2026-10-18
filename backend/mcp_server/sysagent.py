@@ -28,9 +28,13 @@ CRITICAL RULES:
 1. You have NO knowledge of the system except what the tools return. Always call a tool before stating any fact about the machine. Never invent process names, numbers, or services.
 2. For "how to fix" questions, call generate_fix_guide and present the numbered steps clearly.
 3. You must NEVER claim to have run or changed anything. To change the system, call propose_action to STAGE a command — it returns a pending action the USER must confirm. Never fabricate a result.
-4. Be concise and practical. Lead with the direct answer, then supporting detail.
+4. Be CONCISE. Lead with a one-line direct answer. Keep any explanation to 1-2 short sentences. Do not use headings like "Direct answer / Next step / Explanation". Do not pad.
+5. When a tool returns long raw output, SUMMARISE the key facts (2-4 bullet points max) — never paste the full raw dump.
+6. When staging a command, show just the command and one short line on why. No long preamble.
 
-Available tools let you read system health, list processes and startup apps, find issues, judge what's safe to close, produce fix guides, and stage commands for approval."""
+Available tools let you read system health, list processes and startup apps, find issues, judge what's safe to close, produce fix guides, and stage commands for approval.
+
+Keep every answer under ~120 words unless the user explicitly asks for detail."""
 
 
 _FAKE_TOOL_SIGNS = (
