@@ -78,3 +78,16 @@ def analyze_safe_to_close(limit: int = 20) -> dict:
     """
     limit = max(1, min(limit, 50))
     return diagnostics.analyze_safe_to_close(limit=limit)
+
+
+@mcp.tool()
+def generate_fix_guide(problem: str) -> dict:
+    """
+    Produce a numbered, step-by-step guide to fix a described system problem
+    (e.g. "disk is full", "wifi not working", "boot is slow", "a service
+    failed"). Each step includes the command, an explanation, and a risk level
+    (safe/caution/high). This ONLY explains how to fix the problem — it never
+    runs anything. Use this whenever the user asks how to fix or solve an issue.
+    """
+    from backend.mcp_server import fixes
+    return fixes.generate_fix_guide(problem)
