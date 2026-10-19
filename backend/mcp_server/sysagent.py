@@ -154,7 +154,18 @@ async def _call_model(messages: list[dict]) -> dict:
             logger.warning("API provider unreachable (offline?) — falling back to local model.")
             # fall through to local
 
-    # Local fallback (or no API key configured).
+    # If no API key is configured at all, we can't run the assistant reliably.
+    if api is None:
+        return {
+            "kind": "text",
+            "text": (
+                "Please add your free Groq API key in Settings to start using "
+                "the assistant."
+            ),
+            "_provider": "none",
+        }
+
+    # API key exists but the request failed above (offline) — best-effort local.
     local = _local_provider()
     response = await local.generate(messages=messages, tools=tools, max_tokens=2048)
     return {**_parse_response(response), "_provider": "local"}

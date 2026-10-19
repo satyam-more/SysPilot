@@ -584,6 +584,7 @@ input:focus, select:focus {
   flex: 1;
   border: none;
   background: transparent;
+  color: var(--text);
   resize: none;
   font-size: 15px;
   line-height: 1.5;
@@ -591,7 +592,8 @@ input:focus, select:focus {
   padding: 6px 4px;
   outline: none;
 }
-.composer textarea:focus { border: none; }
+.composer textarea::placeholder { color: var(--text-muted); }
+.composer textarea:focus { border: none; outline: none; }
 .composer-send {
   width: 36px;
   height: 36px;

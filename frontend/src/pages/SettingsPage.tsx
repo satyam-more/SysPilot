@@ -48,60 +48,27 @@ export default function SettingsPage() {
 
 function ModelModeSection({
   status,
-  onUpdate,
 }: {
   status: ModelStatus | null;
   onUpdate: () => void;
 }) {
-  const [switching, setSwitching] = useState(false);
-
-  const setMode = async (mode: "offline" | "api") => {
-    setSwitching(true);
-    try {
-      await modelAPI.setMode(mode);
-      await onUpdate();
-    } catch {
-      /* handled by refresh */
-    } finally {
-      setSwitching(false);
-    }
-  };
-
-  const mode = status?.mode ?? "offline";
-  const connected = status?.connected ?? false;
+  const connected = status?.key_configured ?? false;
 
   return (
     <div className="card">
-      <h2>Model</h2>
+      <h2>AI Model</h2>
       <p style={{ marginBottom: 14, color: "var(--text-muted)" }}>
-        The assistant uses an AI model to reason over your system data. API
-        mode (Groq, free) is recommended — it reliably calls the diagnostic
-        tools. Offline mode is experimental.
+        The assistant uses a free cloud AI model (Groq) to understand your
+        requests and explain your system in plain language. Add your API key
+        below to get started.
       </p>
-
-      <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-        <button
-          className={mode === "api" ? "btn-primary" : "btn-secondary"}
-          disabled={switching}
-          onClick={() => setMode("api")}
-        >
-          API Provider (recommended)
-        </button>
-        <button
-          className={mode === "offline" ? "btn-primary" : "btn-secondary"}
-          disabled={switching}
-          onClick={() => setMode("offline")}
-        >
-          Offline (experimental)
-        </button>
-      </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span className={`status-badge ${connected ? "online" : "offline"}`}>
           <span className="status-dot" />
-          {connected ? "Connected" : "Disconnected"}
+          {connected ? "Ready" : "Not configured"}
         </span>
-        {status?.model && (
+        {status?.model && connected && (
           <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
             Model: {status.model}
           </span>
