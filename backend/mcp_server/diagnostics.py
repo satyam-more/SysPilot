@@ -376,3 +376,43 @@ def get_battery() -> dict:
             result["reported_capacity"] = parsed["capacity"]
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Connectivity (bluetooth / wifi radios)
+# ---------------------------------------------------------------------------
+
+def get_connectivity() -> dict:
+    """
+    Status of radios/devices via rfkill: whether bluetooth and wifi are on,
+    off, or blocked. Read-only. Use for 'is my bluetooth/wifi on' questions.
+    """
+    result: dict = {"devices": []}
+    out = _run(["rfkill", "list"])
+    current: dict = {}
+    for line in out.splitlines():
+        if line and not line.startswith((" ", "\t")):
+            if current:
+                result["devices"].append(current)
+            # e.g. "0: hci0: Bluetooth"
+            parts = line.split(":", 2)
+            kind = parts[2].strip() if len(parts) > 2 else line
+            current = {"type": kind, "soft_blocked": None, "hard_blocked": None}
+        else:
+            low = line.lower()
+            if "soft blocked" in low:
+                current["soft_blocked"] = "yes" in low
+            elif "hard blocked" in low:
+                current["hard_blocked"] = "yes" in low
+    if current:
+        result["devices"].append(current)
+
+    # Friendly summary flags.
+    for d in result["devices"]:
+        kind = d["type"].lower()
+        on = d.get("soft_blocked") is False and d.get("hard_blocked") is False
+        if "bluetooth" in kind:
+            result["bluetooth_on"] = on
+        elif "wireless" in kind or "wlan" in kind or "wifi" in kind:
+            result["wifi_on"] = on
+    return result

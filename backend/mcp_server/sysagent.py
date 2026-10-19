@@ -193,6 +193,8 @@ async def run_system_agent(question: str, history: list[dict] | None = None) -> 
     tool_log: list[dict] = []
     pending_action: dict | None = None
     forced_tool_nudge = False
+    last_sig: str | None = None
+    repeat_count = 0
 
     for i in range(MAX_ITERATIONS):
         result = None
@@ -233,6 +235,26 @@ async def run_system_agent(question: str, history: list[dict] | None = None) -> 
         name = result["tool"]
         args = result.get("input", {})
         call_id = result.get("call_id")
+
+        # Break useless loops: if the model repeats the same tool call, it's
+        # stuck. Force it to answer with what it already has.
+        sig = f"{name}:{json.dumps(args, sort_keys=True)}"
+        if sig == last_sig:
+            repeat_count += 1
+        else:
+            repeat_count = 0
+            last_sig = sig
+        if repeat_count >= 1:
+            messages.append({
+                "role": "user",
+                "content": (
+                    "You already have this information. Do NOT call that tool "
+                    "again. Answer the question now in one plain sentence using "
+                    "what you have. If the data doesn't cover it, say so simply."
+                ),
+            })
+            continue
+
         out = agent_tools.execute(name, args)
 
         # If the agent staged a command, surface the confirmation gate and

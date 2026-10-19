@@ -126,3 +126,13 @@ def confirm_and_apply(pending_id: str) -> dict:
     """
     from backend.mcp_server import actions
     return actions.confirm_and_apply(pending_id)
+
+
+@mcp.tool()
+def get_connectivity() -> dict:
+    """
+    Check whether Bluetooth and Wi-Fi are turned on or off (via rfkill).
+    Read-only. Use for "is my bluetooth on", "is wifi on" questions — do not
+    stage a command.
+    """
+    return diagnostics.get_connectivity()
