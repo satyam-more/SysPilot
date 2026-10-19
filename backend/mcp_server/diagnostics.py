@@ -441,6 +441,19 @@ def get_gpu() -> dict:
             block["driver"] = line.split(":", 1)[-1].strip()
     if block:
         gpus.append(block)
+
+    # VRAM for AMD GPUs (sysfs). Best-effort; not all GPUs expose it.
+    vram = []
+    vout = _run(["bash", "-c", "cat /sys/class/drm/card*/device/mem_info_vram_total 2>/dev/null"])
+    for v in vout.split():
+        try:
+            vram.append(round(int(v) / 1024 / 1024 / 1024, 1))
+        except ValueError:
+            pass
+    if vram:
+        for i, g in enumerate(gpus):
+            if i < len(vram):
+                g["vram_gb"] = vram[i]
     return {"gpus": gpus, "count": len(gpus)}
 
 
