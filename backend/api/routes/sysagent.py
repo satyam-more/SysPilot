@@ -29,6 +29,7 @@ class AskRequest(BaseModel):
 
 class ConfirmRequest(BaseModel):
     pending_id: str = Field(min_length=1, max_length=64)
+    question: str = Field(default="", max_length=1000)
 
 
 @router.post("/ask")
@@ -59,6 +60,7 @@ async def confirm(
             stdout=result.get("stdout", ""),
             stderr=result.get("stderr", ""),
             exit_code=result.get("exit_code", 0),
+            question=body.question,
         )
         result["insight"] = insight
     return result

@@ -310,23 +310,29 @@ async def run_system_agent(question: str, history: list[dict] | None = None) -> 
     }
 
 
-async def interpret_command_result(command: str, stdout: str, stderr: str, exit_code: int) -> str:
+async def interpret_command_result(command: str, stdout: str, stderr: str, exit_code: int, question: str = "") -> str:
     """
-    After a command runs, produce a short plain-language insight so a
-    non-technical user understands the result. No tools — just explanation.
+    After a command runs, produce a plain-language insight so a non-technical
+    user understands the result. If the user asked to SEE a list of things
+    (files, apps, etc.), present the actual items as a clean markdown list or
+    table — don't just summarise the count.
     """
     output = (stdout or "").strip()[:3000]
     err = (stderr or "").strip()[:1000]
     prompt = (
-        f"The user approved and ran this command:\n`{command}`\n\n"
+        f"The user asked: \"{question}\"\n"
+        f"They approved and ran:\n`{command}`\n\n"
         f"Exit code: {exit_code}\n"
         f"Output:\n{output or '(no output)'}\n"
         f"{('Errors:\n' + err) if err else ''}\n\n"
-        "Explain the result to a NON-TECHNICAL person in 1-3 short sentences. "
-        "Answer what they'd actually want to know. NO device names, NO mount "
-        "paths, NO jargon (translate to everyday words like 'USB drive', "
-        "'built-in storage', 'memory'). If everything is fine, say so plainly "
-        "and reassuringly. Under ~50 words."
+        "Reply in simple, friendly language for a non-technical person.\n"
+        "- If they asked to SEE or LIST items (files, apps, drives, etc.), "
+        "show the actual items as a clean markdown bullet list or table with "
+        "readable names. Clean up ugly filenames into readable titles where "
+        "obvious, but keep them recognisable.\n"
+        "- Otherwise, give a 1-3 sentence plain answer with no jargon, no file "
+        "paths, no device names.\n"
+        "- If everything is fine, say so reassuringly."
     )
     messages = [
         {"role": "system", "content": "You explain results to non-technical people in simple, friendly, everyday language. Never use technical jargon, device names, or file paths."},

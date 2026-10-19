@@ -182,8 +182,8 @@ export interface HistoryTurn {
 export const sysAPI = {
   ask: (question: string, history: HistoryTurn[] = []) =>
     api.post<SysAskResponse>("/api/sys/ask", { question, history }),
-  confirm: (pending_id: string) =>
-    api.post<ConfirmResponse>("/api/sys/confirm", { pending_id }),
+  confirm: (pending_id: string, question = "") =>
+    api.post<ConfirmResponse>("/api/sys/confirm", { pending_id, question }),
 };
 
 export interface TrackingStatus {

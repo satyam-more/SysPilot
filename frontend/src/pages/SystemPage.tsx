@@ -59,8 +59,9 @@ export default function SystemPage() {
 
   const confirm = async (turnId: number, pending: PendingAction) => {
     setBusy(true);
+    const turn = turns.find((t) => t.id === turnId);
     try {
-      const r = await sysAPI.confirm(pending.pending_id);
+      const r = await sysAPI.confirm(pending.pending_id, turn?.question ?? "");
       update(turnId, { confirmResult: r.data, pending: null });
     } catch {
       update(turnId, { error: "Could not run the command." });
