@@ -416,3 +416,274 @@ def get_connectivity() -> dict:
         elif "wireless" in kind or "wlan" in kind or "wifi" in kind:
             result["wifi_on"] = on
     return result
+
+
+# ---------------------------------------------------------------------------
+# GPU
+# ---------------------------------------------------------------------------
+
+def get_gpu() -> dict:
+    """
+    Graphics card(s) info via lspci + the kernel driver in use. Read-only.
+    Use for 'check my gpu / graphics card' questions.
+    """
+    gpus: list[dict] = []
+    out = _run(["bash", "-c", "lspci -k | grep -EA3 'VGA|3D|Display'"])
+    block: dict = {}
+    for line in out.splitlines():
+        low = line.lower()
+        if "vga" in low or "3d" in low or "display" in low:
+            if block:
+                gpus.append(block)
+            name = line.split(":", 2)[-1].strip() if ":" in line else line.strip()
+            block = {"name": name, "driver": None}
+        elif "kernel driver in use" in low:
+            block["driver"] = line.split(":", 1)[-1].strip()
+    if block:
+        gpus.append(block)
+    return {"gpus": gpus, "count": len(gpus)}
+
+
+# ---------------------------------------------------------------------------
+# Extra quick diagnostics
+# ---------------------------------------------------------------------------
+
+def get_network() -> dict:
+    """Network: online status, active connections, local IP."""
+    result: dict = {"online": False, "connections": [], "ip": None}
+    # Active NetworkManager connections.
+    out = _run(["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"])
+    for line in out.splitlines():
+        if line.strip():
+            parts = line.split(":")
+            result["connections"].append({"name": parts[0], "type": parts[1] if len(parts) > 1 else ""})
+    # Local IP.
+    ipout = _run(["bash", "-c", "ip -4 addr show scope global | grep -m1 inet"])
+    if ipout.strip():
+        try:
+            result["ip"] = ipout.strip().split()[1].split("/")[0]
+        except IndexError:
+            pass
+    result["online"] = bool(result["connections"])
+    return result
+
+
+def get_cpu_info() -> dict:
+    """CPU model, cores, and current per-core/overall usage."""
+    model = ""
+    out = _run(["bash", "-c", "grep -m1 'model name' /proc/cpuinfo"])
+    if ":" in out:
+        model = out.split(":", 1)[1].strip()
+    return {
+        "model": model,
+        "physical_cores": psutil.cpu_count(logical=False),
+        "logical_cores": psutil.cpu_count(logical=True),
+        "usage_percent": psutil.cpu_percent(interval=0.5),
+        "per_core_percent": psutil.cpu_percent(interval=0.3, percpu=True),
+        "load_avg": list(psutil.getloadavg()),
+    }
+
+
+def get_memory_details() -> dict:
+    """Detailed RAM + swap breakdown and top memory consumers."""
+    vm = psutil.virtual_memory()
+    sm = psutil.swap_memory()
+    top = list_running_processes(limit=5, sort_by="memory")["processes"]
+    return {
+        "total_mb": round(vm.total / 1024 / 1024),
+        "used_mb": round(vm.used / 1024 / 1024),
+        "available_mb": round(vm.available / 1024 / 1024),
+        "percent": vm.percent,
+        "swap_used_mb": round(sm.used / 1024 / 1024),
+        "swap_percent": sm.percent,
+        "top_consumers": top,
+    }
+
+
+def get_temperatures_detail() -> dict:
+    """All temperature sensor readings with a simple hot/ok verdict."""
+    temps = _get_temperatures()
+    hottest = max(temps.values()) if temps else 0
+    verdict = "hot" if hottest >= 85 else ("warm" if hottest >= 70 else "normal")
+    return {"temperatures": temps, "hottest_c": hottest, "verdict": verdict}
+
+
+def get_uptime() -> dict:
+    """How long the system has been running since last boot."""
+    boot = datetime.fromtimestamp(psutil.boot_time(), tz=timezone.utc)
+    secs = (datetime.now(timezone.utc) - boot).total_seconds()
+    return {
+        "boot_time": boot.isoformat(),
+        "uptime_hours": round(secs / 3600, 1),
+        "uptime_days": round(secs / 86400, 2),
+    }
+
+
+def get_logged_in_users() -> dict:
+    """Currently logged-in users and their sessions."""
+    users = []
+    for u in psutil.users():
+        users.append({
+            "name": u.name,
+            "terminal": u.terminal,
+            "started": datetime.fromtimestamp(u.started, tz=timezone.utc).isoformat(),
+        })
+    return {"users": users, "count": len(users)}
+
+
+def get_large_files(path: str = "~", limit: int = 10) -> dict:
+    """Largest files under a directory (default home). Read-only, helps free space."""
+    import os
+    base = os.path.expanduser(path)
+    cmd = f"find {shlex_quote(base)} -type f -printf '%s\\t%p\\n' 2>/dev/null | sort -rn | head -n {int(limit)}"
+    try:
+        res = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=25.0, check=False)
+        out = res.stdout
+    except (subprocess.SubprocessError, OSError):
+        out = ""
+    files = []
+    for line in out.splitlines():
+        if "\t" in line:
+            size, p = line.split("\t", 1)
+            try:
+                files.append({"path": p, "size_mb": round(int(size) / 1024 / 1024, 1)})
+            except ValueError:
+                pass
+    return {"files": files, "searched": base}
+
+
+def shlex_quote(s: str) -> str:
+    import shlex as _sh
+    return _sh.quote(s)
+
+
+def get_peripherals() -> dict:
+    """Connected peripherals: USB devices, input devices, and monitors. Read-only."""
+    result: dict = {"usb": [], "inputs": [], "monitors": []}
+    # USB devices.
+    for line in _run(["lsusb"]).splitlines():
+        if "ID " in line:
+            name = line.split("ID ", 1)[-1].strip()
+            name = name.split(" ", 1)[-1] if " " in name else name
+            if name and "root hub" not in name.lower():
+                result["usb"].append(name)
+    # Input devices (keyboard/mouse) from /proc/bus/input/devices.
+    names = _run(["bash", "-c", "grep -i '^N: Name=' /proc/bus/input/devices"])
+    for line in names.splitlines():
+        n = line.split("=", 1)[-1].strip().strip('"')
+        low = n.lower()
+        if any(k in low for k in ("keyboard", "mouse", "touchpad", "trackpad")):
+            result["inputs"].append(n)
+    # Connected monitors via DRM.
+    mons = _run(["bash", "-c", "for f in /sys/class/drm/*/status; do echo \"$f $(cat $f)\"; done 2>/dev/null"])
+    for line in mons.splitlines():
+        if line.endswith("connected") and "disconnected" not in line:
+            dev = line.split("/")[-1].split(" ")[0] if "/" in line else line
+            result["monitors"].append(dev.replace("card", "display "))
+    result["counts"] = {k: len(v) for k, v in result.items() if isinstance(v, list)}
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Batch: more read-only diagnostics
+# ---------------------------------------------------------------------------
+
+def get_os_info() -> dict:
+    """OS name, version, kernel, desktop environment, architecture."""
+    import platform
+    pretty = ""
+    out = _run(["bash", "-c", "grep -m1 PRETTY_NAME /etc/os-release"])
+    if "=" in out:
+        pretty = out.split("=", 1)[1].strip().strip('"')
+    return {
+        "os": pretty or platform.system(),
+        "kernel": platform.release(),
+        "architecture": platform.machine(),
+        "desktop": _run(["bash", "-c", "echo $XDG_CURRENT_DESKTOP"]).strip() or "unknown",
+        "hostname": platform.node(),
+    }
+
+
+def get_disk_io() -> dict:
+    """Disk read/write totals since boot."""
+    io = psutil.disk_io_counters()
+    if not io:
+        return {"available": False}
+    return {
+        "available": True,
+        "read_mb": round(io.read_bytes / 1024 / 1024, 1),
+        "write_mb": round(io.write_bytes / 1024 / 1024, 1),
+        "read_count": io.read_count,
+        "write_count": io.write_count,
+    }
+
+
+def get_network_traffic() -> dict:
+    """Total network data sent/received since boot."""
+    io = psutil.net_io_counters()
+    return {
+        "sent_mb": round(io.bytes_sent / 1024 / 1024, 1),
+        "received_mb": round(io.bytes_recv / 1024 / 1024, 1),
+        "packets_sent": io.packets_sent,
+        "packets_recv": io.packets_recv,
+    }
+
+
+def get_top_cpu_processes(limit: int = 10) -> dict:
+    """Processes using the most CPU right now."""
+    return list_running_processes(limit=limit, sort_by="cpu")
+
+
+def get_package_updates() -> dict:
+    """Count of available APT package updates (read-only)."""
+    out = _run(["bash", "-c", "apt list --upgradable 2>/dev/null | grep -c upgradable"])
+    try:
+        count = int(out.strip())
+    except ValueError:
+        count = 0
+    return {"updates_available": count}
+
+
+def get_kernel_errors() -> dict:
+    """Recent kernel errors/warnings from dmesg (read-only)."""
+    out = _run(["bash", "-c", "dmesg --level=err,warn 2>/dev/null | tail -15"])
+    lines = [ln for ln in out.splitlines() if ln.strip()]
+    return {"count": len(lines), "recent": lines[-10:]}
+
+
+def get_fan_speed() -> dict:
+    """Fan speeds from sensors, if available."""
+    out = _run(["bash", "-c", "sensors 2>/dev/null | grep -i fan"])
+    fans = [ln.strip() for ln in out.splitlines() if ln.strip()]
+    return {"fans": fans, "count": len(fans)}
+
+
+def get_mounted_drives() -> dict:
+    """All mounted drives/partitions with usage (same as disks in health)."""
+    return {"drives": _get_disks()}
+
+
+def get_swap_info() -> dict:
+    """Swap (virtual memory) usage and whether the system is swapping heavily."""
+    sm = psutil.swap_memory()
+    return {
+        "total_mb": round(sm.total / 1024 / 1024),
+        "used_mb": round(sm.used / 1024 / 1024),
+        "percent": sm.percent,
+        "swapping_heavily": sm.percent > 50,
+    }
+
+
+def get_process_by_name(name: str) -> dict:
+    """Find running processes whose name matches a search term."""
+    matches = []
+    term = (name or "").lower()
+    for p in psutil.process_iter(["pid", "name", "memory_info", "cpu_percent"]):
+        try:
+            nm = (p.info.get("name") or "").lower()
+            if term and term in nm:
+                mem = p.info["memory_info"].rss / 1024 / 1024 if p.info.get("memory_info") else 0
+                matches.append({"pid": p.info["pid"], "name": p.info["name"], "memory_mb": round(mem, 1)})
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return {"matches": matches, "count": len(matches)}

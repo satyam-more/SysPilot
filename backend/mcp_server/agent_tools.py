@@ -53,6 +53,101 @@ _TOOLS: dict[str, dict[str, Any]] = {
         "description": "Whether Bluetooth and Wi-Fi are on or off. Use for bluetooth/wifi questions — do not stage a command.",
         "parameters": {"type": "object", "properties": {}},
     },
+    "get_gpu": {
+        "fn": lambda **k: diagnostics.get_gpu(),
+        "description": "Graphics card(s) and driver in use. Use for GPU/graphics questions.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_network": {
+        "fn": lambda **k: diagnostics.get_network(),
+        "description": "Network status: online, active connections, local IP.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_cpu_info": {
+        "fn": lambda **k: diagnostics.get_cpu_info(),
+        "description": "CPU model, core counts, and current usage.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_memory_details": {
+        "fn": lambda **k: diagnostics.get_memory_details(),
+        "description": "Detailed RAM/swap usage and top memory consumers.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_temperatures_detail": {
+        "fn": lambda **k: diagnostics.get_temperatures_detail(),
+        "description": "All temperature sensors with a hot/warm/normal verdict.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_uptime": {
+        "fn": lambda **k: diagnostics.get_uptime(),
+        "description": "How long the computer has been running since last boot.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_logged_in_users": {
+        "fn": lambda **k: diagnostics.get_logged_in_users(),
+        "description": "Currently logged-in users and sessions.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_large_files": {
+        "fn": lambda path="~", limit=10, **k: diagnostics.get_large_files(str(path), max(1, min(int(limit), 30))),
+        "description": "Largest files under a folder (default home) to help free disk space.",
+        "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "limit": {"type": "integer"}}},
+    },
+    "get_peripherals": {
+        "fn": lambda **k: diagnostics.get_peripherals(),
+        "description": "Connected peripherals: USB devices, keyboard/mouse, and monitors. Use for keyboard/mouse/monitor/USB questions.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_os_info": {
+        "fn": lambda **k: diagnostics.get_os_info(),
+        "description": "Operating system name, version, kernel, desktop, architecture, hostname.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_disk_io": {
+        "fn": lambda **k: diagnostics.get_disk_io(),
+        "description": "Disk read/write activity totals since boot.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_network_traffic": {
+        "fn": lambda **k: diagnostics.get_network_traffic(),
+        "description": "Total network data sent/received since boot.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_top_cpu_processes": {
+        "fn": lambda limit=10, **k: diagnostics.get_top_cpu_processes(max(1, min(int(limit), 30))),
+        "description": "Processes using the most CPU right now.",
+        "parameters": {"type": "object", "properties": {"limit": {"type": "integer"}}},
+    },
+    "get_package_updates": {
+        "fn": lambda **k: diagnostics.get_package_updates(),
+        "description": "How many software/package updates are available.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_kernel_errors": {
+        "fn": lambda **k: diagnostics.get_kernel_errors(),
+        "description": "Recent kernel errors/warnings (hardware/driver issues).",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_fan_speed": {
+        "fn": lambda **k: diagnostics.get_fan_speed(),
+        "description": "Fan speeds, if sensors report them.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_mounted_drives": {
+        "fn": lambda **k: diagnostics.get_mounted_drives(),
+        "description": "All mounted drives/partitions with usage.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_swap_info": {
+        "fn": lambda **k: diagnostics.get_swap_info(),
+        "description": "Swap/virtual-memory usage and whether swapping heavily.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_process_by_name": {
+        "fn": lambda name="", **k: diagnostics.get_process_by_name(str(name)),
+        "description": "Find running processes matching a name (e.g. 'chrome', 'is X running').",
+        "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
+    },
     "analyze_safe_to_close": {
         "fn": lambda limit=20, **k: diagnostics.analyze_safe_to_close(limit=max(1, min(int(limit), 50))),
         "description": "Classify running processes safe/caution/critical to close.",

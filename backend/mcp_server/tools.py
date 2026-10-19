@@ -136,3 +136,120 @@ def get_connectivity() -> dict:
     stage a command.
     """
     return diagnostics.get_connectivity()
+
+
+@mcp.tool()
+def get_gpu() -> dict:
+    """
+    Get the computer's graphics card(s) and the driver in use. Read-only.
+    Use for "check my gpu / graphics card" questions — do not stage a command.
+    """
+    return diagnostics.get_gpu()
+
+
+@mcp.tool()
+def get_network() -> dict:
+    """Network status: whether online, active connections, and local IP. Read-only."""
+    return diagnostics.get_network()
+
+
+@mcp.tool()
+def get_cpu_info() -> dict:
+    """CPU model, core counts, and current usage. Read-only."""
+    return diagnostics.get_cpu_info()
+
+
+@mcp.tool()
+def get_memory_details() -> dict:
+    """Detailed RAM/swap usage and the top memory-consuming apps. Read-only."""
+    return diagnostics.get_memory_details()
+
+
+@mcp.tool()
+def get_temperatures_detail() -> dict:
+    """All temperature sensors with a hot/warm/normal verdict. Read-only."""
+    return diagnostics.get_temperatures_detail()
+
+
+@mcp.tool()
+def get_uptime() -> dict:
+    """How long the computer has been running since last boot. Read-only."""
+    return diagnostics.get_uptime()
+
+
+@mcp.tool()
+def get_logged_in_users() -> dict:
+    """Currently logged-in users and their sessions. Read-only."""
+    return diagnostics.get_logged_in_users()
+
+
+@mcp.tool()
+def get_large_files(path: str = "~", limit: int = 10) -> dict:
+    """Largest files under a folder (default home) to help free disk space. Read-only."""
+    return diagnostics.get_large_files(path, max(1, min(limit, 30)))
+
+
+@mcp.tool()
+def get_peripherals() -> dict:
+    """Connected peripherals: USB devices, keyboard/mouse, and monitors. Read-only."""
+    return diagnostics.get_peripherals()
+
+
+@mcp.tool()
+def get_os_info() -> dict:
+    """Operating system name, version, kernel, desktop, architecture, hostname. Read-only."""
+    return diagnostics.get_os_info()
+
+
+@mcp.tool()
+def get_disk_io() -> dict:
+    """Disk read/write activity totals since boot. Read-only."""
+    return diagnostics.get_disk_io()
+
+
+@mcp.tool()
+def get_network_traffic() -> dict:
+    """Total network data sent/received since boot. Read-only."""
+    return diagnostics.get_network_traffic()
+
+
+@mcp.tool()
+def get_top_cpu_processes(limit: int = 10) -> dict:
+    """Processes using the most CPU right now. Read-only."""
+    return diagnostics.get_top_cpu_processes(max(1, min(limit, 30)))
+
+
+@mcp.tool()
+def get_package_updates() -> dict:
+    """How many software/package updates are available. Read-only."""
+    return diagnostics.get_package_updates()
+
+
+@mcp.tool()
+def get_kernel_errors() -> dict:
+    """Recent kernel errors/warnings (hardware/driver issues). Read-only."""
+    return diagnostics.get_kernel_errors()
+
+
+@mcp.tool()
+def get_fan_speed() -> dict:
+    """Fan speeds, if sensors report them. Read-only."""
+    return diagnostics.get_fan_speed()
+
+
+@mcp.tool()
+def get_mounted_drives() -> dict:
+    """All mounted drives/partitions with usage. Read-only."""
+    return diagnostics.get_mounted_drives()
+
+
+@mcp.tool()
+def get_swap_info() -> dict:
+    """Swap/virtual-memory usage and whether swapping heavily. Read-only."""
+    return diagnostics.get_swap_info()
+
+
+@mcp.tool()
+def get_process_by_name(name: str) -> dict:
+    """Find running processes matching a name (e.g. is Chrome running). Read-only."""
+    return diagnostics.get_process_by_name(name)
