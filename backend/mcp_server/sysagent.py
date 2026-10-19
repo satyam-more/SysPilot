@@ -53,31 +53,49 @@ def _looks_like_fake_tool_use(text: str) -> bool:
     return any(sign in low for sign in _FAKE_TOOL_SIGNS)
 
 
-def _tool_capable_provider():
+def _api_provider_if_available():
     """
-    The system agent needs reliable native tool-calling. Small local models
-    (qwen2.5:3b) can't do it — they fake tool use. So prefer the API provider
-    whenever a key is configured, regardless of the stored mode. Fall back to
-    the active provider only if no API key exists.
+    Return an APIProvider if any API key is configured, else None.
+    Preferred for reliable native tool-calling (small local models can't).
     """
+    from backend.harness.providers import provider_registry as pr
     from backend.harness.providers.api_provider import APIProvider
     from backend.security.keystore import key_is_configured
 
-    cfg = provider_registry._api_config
-    if key_is_configured(cfg.get("provider", "openai")):
+    try:
+        pr._load_config()
+    except Exception:  # noqa: BLE001
+        pass
+
+    def _default_model(name: str) -> str:
+        return pr.SUPPORTED_PROVIDERS.get(name, {}).get("default_model", "")
+
+    cfg = pr._api_config
+    configured = cfg.get("provider")
+    if configured and key_is_configured(configured):
         return APIProvider(
-            provider=cfg.get("provider", "openai"),
-            model=cfg.get("model", ""),
-            key_ref=cfg.get("key_ref", ""),
+            provider=configured,
+            model=cfg.get("model") or _default_model(configured),
+            key_ref=cfg.get("key_ref") or f"{configured}_key",
         )
-    return provider_registry.get_active_provider()
+    for name in ("groq", "openai"):
+        if key_is_configured(name):
+            return APIProvider(provider=name, model=_default_model(name), key_ref=f"{name}_key")
+    return None
 
 
-async def _call_model(messages: list[dict]) -> dict:
-    provider = _tool_capable_provider()
-    response = await provider.generate(
-        messages=messages, tools=agent_tools.tool_schemas(), max_tokens=2048
-    )
+def _local_provider():
+    """The offline Ollama provider (best-effort, no tool-calling guarantee)."""
+    from backend.harness.providers.ollama_provider import OllamaProvider
+    return OllamaProvider()
+
+
+def _tool_capable_provider():
+    """Preferred provider: API if a key exists, else local."""
+    return _api_provider_if_available() or _local_provider()
+
+
+def _parse_response(response: dict) -> dict:
     msg: dict = {}
     if "message" in response and isinstance(response["message"], dict):
         msg = response["message"]
@@ -98,6 +116,42 @@ async def _call_model(messages: list[dict]) -> dict:
     if content:
         return {"kind": "text", "text": content}
     return {"kind": "text", "text": (msg.get("reasoning") or "").strip()}
+
+
+async def _call_model(messages: list[dict]) -> dict:
+    """
+    Call the preferred (API) provider. If it fails due to NO INTERNET, fall
+    back to the local Ollama model so the app still works offline (best-effort,
+    weaker tool-calling). Returns a parsed result plus which provider answered.
+    """
+    import httpx
+
+    from backend.harness.providers.api_provider import (
+        ModelTimeoutError,
+        ProviderUnavailableError,
+    )
+
+    api = _api_provider_if_available()
+    tools = agent_tools.tool_schemas()
+
+    if api is not None:
+        try:
+            response = await api.generate(messages=messages, tools=tools, max_tokens=2048)
+            return {**_parse_response(response), "_provider": "api"}
+        except (
+            httpx.ConnectError,
+            httpx.TimeoutException,
+            httpx.NetworkError,
+            ProviderUnavailableError,
+            ModelTimeoutError,
+        ):
+            logger.warning("API provider unreachable (offline?) — falling back to local model.")
+            # fall through to local
+
+    # Local fallback (or no API key configured).
+    local = _local_provider()
+    response = await local.generate(messages=messages, tools=tools, max_tokens=2048)
+    return {**_parse_response(response), "_provider": "local"}
 
 
 async def run_system_agent(question: str, history: list[dict] | None = None) -> dict:
