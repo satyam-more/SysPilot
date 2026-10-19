@@ -27,7 +27,7 @@ SYSTEM_PROMPT = """You are a System Health Assistant. You help the user understa
 CRITICAL RULES:
 1. You have NO knowledge of the system except what the tools return. Always call a tool before stating any fact about the machine. Never invent process names, numbers, or services.
 2. For "how to fix" questions, call generate_fix_guide and present the numbered steps clearly.
-3. You must NEVER claim to have run or changed anything. To change the system, call propose_action to STAGE a command — it returns a pending action the USER must confirm. Never fabricate a result.
+3. You must NEVER claim to have run or changed anything. To run or change anything, call propose_action ONCE to stage the command. The user approves it with an on-screen button — do NOT ask them to "reply yes" or "confirm", do NOT ask for approval in text, and do NOT call propose_action more than once for the same command. After staging, write ONE short sentence saying what the command will check/do, then stop.
 4. Be CONCISE. Lead with a one-line direct answer. Keep any explanation to 1-2 short sentences. Do not use headings like "Direct answer / Next step / Explanation". Do not pad.
 5. When a tool returns long raw output, SUMMARISE the key facts (2-4 bullet points max) — never paste the full raw dump.
 6. When staging a command, show just the command and one short line on why. No long preamble.
@@ -218,13 +218,21 @@ async def run_system_agent(question: str, history: list[dict] | None = None) -> 
         call_id = result.get("call_id")
         out = agent_tools.execute(name, args)
 
-        # If the agent staged a command, surface it as the confirmation gate.
+        # If the agent staged a command, surface the confirmation gate and
+        # RETURN immediately. The user approves via the on-screen button — we
+        # must not keep looping (which causes re-proposing / "reply yes" text).
         if name == "propose_action" and isinstance(out, dict) and out.get("pending_id"):
-            pending_action = {
-                "pending_id": out["pending_id"],
-                "command": out.get("command"),
-                "classification": out.get("classification"),
-                "message": out.get("message"),
+            cmd = out.get("command", "")
+            return {
+                "answer": f"I can run this for you: `{cmd}`. Review it below and click Run it to proceed.",
+                "tool_calls": tool_log + [{"tool": name, "input": args, "result_preview": ""}],
+                "pending_action": {
+                    "pending_id": out["pending_id"],
+                    "command": cmd,
+                    "classification": out.get("classification"),
+                    "message": out.get("message"),
+                },
+                "iterations": i + 1,
             }
 
         out_str = json.dumps(out, default=str)

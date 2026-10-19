@@ -185,33 +185,39 @@ function CommandResult({ result }: { result: ConfirmResponse }) {
   const ok = result.status === "ok";
   return (
     <div className={`notice ${ok ? "success" : "error"}`} style={{ marginTop: 14 }}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>
-        {ok ? "Done" : "Failed"}
-      </div>
-      {result.message && <p>{result.message}</p>}
+      {ok ? (
+        <>
+          {/* Hero: the plain-language insight is the main content. */}
+          {result.insight ? (
+            <div className="markdown" style={{ fontSize: 15, lineHeight: 1.6 }}>
+              <Markdown remarkPlugins={[remarkGfm]}>{result.insight}</Markdown>
+            </div>
+          ) : (
+            <p>Done.</p>
+          )}
 
-      {/* Lead with the plain-language insight. */}
-      {result.insight && (
-        <div className="markdown" style={{ marginBottom: 8 }}>
-          <Markdown remarkPlugins={[remarkGfm]}>{result.insight}</Markdown>
-        </div>
-      )}
-
-      {/* Raw output tucked into a collapsible section. */}
-      {result.stdout && (
-        <details style={{ marginTop: 6 }}>
-          <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
-            Show raw output
-          </summary>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, marginTop: 6, maxHeight: 220, overflow: "auto" }}>
-            {result.stdout}
-          </pre>
-        </details>
-      )}
-      {result.stderr && (
-        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "var(--danger)", marginTop: 6 }}>
-          {result.stderr}
-        </pre>
+          {/* Raw output is hidden by default — only shown if the user opens it. */}
+          {result.stdout && (
+            <details style={{ marginTop: 12 }}>
+              <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-muted)", opacity: 0.7 }}>
+                Technical details (raw output)
+              </summary>
+              <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, marginTop: 8, maxHeight: 220, overflow: "auto", opacity: 0.85 }}>
+                {result.stdout}
+              </pre>
+            </details>
+          )}
+        </>
+      ) : (
+        <>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Failed</div>
+          {result.message && <p>{result.message}</p>}
+          {result.stderr && (
+            <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "var(--danger)", marginTop: 6 }}>
+              {result.stderr}
+            </pre>
+          )}
+        </>
       )}
     </div>
   );
