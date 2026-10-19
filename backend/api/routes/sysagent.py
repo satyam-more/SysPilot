@@ -47,7 +47,10 @@ async def confirm(
     request: Request,
     _auth: None = Depends(validate_browser_request),
 ) -> dict:
-    result = actions.confirm_and_apply(body.pending_id)
+    # Try a staged file write first; if not a file-write id, run as a command.
+    result = actions.confirm_file_write(body.pending_id)
+    if result.get("status") == "error" and "No matching pending file write" in result.get("message", ""):
+        result = actions.confirm_and_apply(body.pending_id)
     # After running, interpret the output into a plain-language insight so the
     # user doesn't have to read raw command output.
     if result.get("status") == "ok":

@@ -148,6 +148,69 @@ _TOOLS: dict[str, dict[str, Any]] = {
         "description": "Find running processes matching a name (e.g. 'chrome', 'is X running').",
         "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
     },
+    "get_gpu_usage": {
+        "fn": lambda **k: diagnostics.get_gpu_usage(),
+        "description": "Overall GPU load percentage (per-app GPU usage isn't available on Linux).",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_bios_info": {
+        "fn": lambda **k: diagnostics.get_bios_info(),
+        "description": "Motherboard/BIOS vendor, version, date, laptop model.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_power_info": {
+        "fn": lambda **k: diagnostics.get_power_info(),
+        "description": "Whether on AC power and current power draw in watts.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_cpu_frequency": {
+        "fn": lambda **k: diagnostics.get_cpu_frequency(),
+        "description": "Current, min, and max CPU clock speeds.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_open_ports": {
+        "fn": lambda **k: diagnostics.get_open_ports(),
+        "description": "Network ports the computer is listening on.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_zombie_processes": {
+        "fn": lambda **k: diagnostics.get_zombie_processes(),
+        "description": "Count of zombie/stuck processes.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_disk_health": {
+        "fn": lambda **k: diagnostics.get_disk_health(),
+        "description": "Physical drives and a note on checking SMART health.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_boot_time_analysis": {
+        "fn": lambda **k: diagnostics.get_boot_time_analysis(),
+        "description": "Total boot time and the slowest services at startup.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_recent_installs": {
+        "fn": lambda **k: diagnostics.get_recent_installs(),
+        "description": "Recently installed or upgraded software packages.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "get_app_count": {
+        "fn": lambda **k: diagnostics.get_app_count(),
+        "description": "How many processes/apps are currently running.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "propose_file_write": {
+        "fn": lambda path="", content="", mode="create", **k: actions.propose_file_write(str(path), str(content), str(mode)),
+        "description": "Create, overwrite, or append to a file in the user's home folder. STAGES the write for user approval (never writes directly). Use when asked to create/edit/save a file or note. mode is 'create', 'overwrite', or 'append'.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "File path (in home folder)"},
+                "content": {"type": "string", "description": "File contents"},
+                "mode": {"type": "string", "enum": ["create", "overwrite", "append"]},
+            },
+            "required": ["path", "content"],
+        },
+    },
     "analyze_safe_to_close": {
         "fn": lambda limit=20, **k: diagnostics.analyze_safe_to_close(limit=max(1, min(int(limit), 50))),
         "description": "Classify running processes safe/caution/critical to close.",

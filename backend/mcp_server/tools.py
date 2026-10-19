@@ -253,3 +253,63 @@ def get_swap_info() -> dict:
 def get_process_by_name(name: str) -> dict:
     """Find running processes matching a name (e.g. is Chrome running). Read-only."""
     return diagnostics.get_process_by_name(name)
+
+
+@mcp.tool()
+def get_gpu_usage() -> dict:
+    """Overall GPU load %. Per-app GPU usage isn't available on Linux. Read-only."""
+    return diagnostics.get_gpu_usage()
+
+
+@mcp.tool()
+def get_bios_info() -> dict:
+    """Motherboard/BIOS vendor, version, date, and laptop model. Read-only."""
+    return diagnostics.get_bios_info()
+
+
+@mcp.tool()
+def get_power_info() -> dict:
+    """Whether on AC power and current power draw in watts. Read-only."""
+    return diagnostics.get_power_info()
+
+
+@mcp.tool()
+def get_cpu_frequency() -> dict:
+    """Current, min, and max CPU clock speeds. Read-only."""
+    return diagnostics.get_cpu_frequency()
+
+
+@mcp.tool()
+def get_open_ports() -> dict:
+    """Network ports the computer is listening on. Read-only."""
+    return diagnostics.get_open_ports()
+
+
+@mcp.tool()
+def get_zombie_processes() -> dict:
+    """Count of zombie/stuck processes. Read-only."""
+    return diagnostics.get_zombie_processes()
+
+
+@mcp.tool()
+def get_disk_health() -> dict:
+    """Physical drives and a note on checking SMART health. Read-only."""
+    return diagnostics.get_disk_health()
+
+
+@mcp.tool()
+def get_boot_time_analysis() -> dict:
+    """Total boot time and slowest startup services. Read-only."""
+    return diagnostics.get_boot_time_analysis()
+
+
+@mcp.tool()
+def get_recent_installs() -> dict:
+    """Recently installed or upgraded software packages. Read-only."""
+    return diagnostics.get_recent_installs()
+
+
+@mcp.tool()
+def get_app_count() -> dict:
+    """How many processes/apps are currently running. Read-only."""
+    return diagnostics.get_app_count()

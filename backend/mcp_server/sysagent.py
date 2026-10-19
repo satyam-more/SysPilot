@@ -260,6 +260,20 @@ async def run_system_agent(question: str, history: list[dict] | None = None) -> 
         # If the agent staged a command, surface the confirmation gate and
         # RETURN immediately. The user approves via the on-screen button — we
         # must not keep looping (which causes re-proposing / "reply yes" text).
+        if name == "propose_file_write" and isinstance(out, dict) and out.get("pending_id"):
+            return {
+                "answer": out.get("message", "Review the file change below and approve."),
+                "tool_calls": tool_log + [{"tool": name, "input": args, "result_preview": ""}],
+                "pending_action": {
+                    "pending_id": out["pending_id"],
+                    "command": f"{out.get('mode','write')} file: {out.get('path','')}",
+                    "classification": "approval_required",
+                    "message": out.get("message"),
+                    "is_file_write": True,
+                },
+                "iterations": i + 1,
+            }
+
         if name == "propose_action" and isinstance(out, dict) and out.get("pending_id"):
             cmd = out.get("command", "")
             return {

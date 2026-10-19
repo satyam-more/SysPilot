@@ -700,3 +700,121 @@ def get_process_by_name(name: str) -> dict:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return {"matches": matches, "count": len(matches)}
+
+
+# ---------------------------------------------------------------------------
+# Batch 3: more read-only diagnostics
+# ---------------------------------------------------------------------------
+
+def get_gpu_usage() -> dict:
+    """Overall GPU usage % (AMD sysfs). Per-app breakdown isn't available on Linux without root tools."""
+    usage = []
+    out = _run(["bash", "-c", "cat /sys/class/drm/card*/device/gpu_busy_percent 2>/dev/null"])
+    for v in out.split():
+        try:
+            usage.append(int(v))
+        except ValueError:
+            pass
+    return {"gpu_usage_percent": usage, "per_app_available": False,
+            "note": "Overall GPU load only; per-application GPU usage isn't exposed on this system."}
+
+
+def get_bios_info() -> dict:
+    """Motherboard/BIOS vendor, version, and date (dmidecode may need root; falls back to sysfs)."""
+    def rd(p):
+        return _run(["bash", "-c", f"cat {p} 2>/dev/null"]).strip()
+    return {
+        "bios_vendor": rd("/sys/class/dmi/id/bios_vendor"),
+        "bios_version": rd("/sys/class/dmi/id/bios_version"),
+        "bios_date": rd("/sys/class/dmi/id/bios_date"),
+        "board_name": rd("/sys/class/dmi/id/board_name"),
+        "product_name": rd("/sys/class/dmi/id/product_name"),
+    }
+
+
+def get_power_info() -> dict:
+    """Power/AC adapter state and current power draw if available."""
+    batt = None
+    try:
+        batt = psutil.sensors_battery()
+    except (AttributeError, OSError):
+        pass
+    result = {"on_ac_power": batt.power_plugged if batt else None}
+    draw = _run(["bash", "-c", "cat /sys/class/power_supply/BAT*/power_now 2>/dev/null"]).strip()
+    if draw:
+        try:
+            result["power_draw_watts"] = round(int(draw.split()[0]) / 1_000_000, 1)
+        except (ValueError, IndexError):
+            pass
+    return result
+
+
+def get_cpu_frequency() -> dict:
+    """Current, min, and max CPU clock speeds."""
+    try:
+        f = psutil.cpu_freq()
+    except (NotImplementedError, OSError):
+        f = None
+    if not f:
+        return {"available": False}
+    return {"available": True, "current_mhz": round(f.current), "min_mhz": round(f.min), "max_mhz": round(f.max)}
+
+
+def get_open_ports() -> dict:
+    """Network ports your computer is listening on (what's accepting connections)."""
+    ports = []
+    for c in psutil.net_connections(kind="inet"):
+        if c.status == "LISTEN" and c.laddr:
+            ports.append({"port": c.laddr.port, "pid": c.pid})
+    # Dedup by port.
+    seen = {}
+    for p in ports:
+        seen[p["port"]] = p
+    return {"listening_ports": sorted(seen.values(), key=lambda x: x["port"]), "count": len(seen)}
+
+
+def get_zombie_processes() -> dict:
+    """Count of zombie/defunct processes (usually harmless but can indicate a stuck app)."""
+    zombies = []
+    for p in psutil.process_iter(["pid", "name", "status"]):
+        try:
+            if p.info["status"] == psutil.STATUS_ZOMBIE:
+                zombies.append({"pid": p.info["pid"], "name": p.info["name"]})
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return {"zombies": zombies, "count": len(zombies)}
+
+
+def get_disk_health() -> dict:
+    """SMART overall health for drives, if smartctl is readable without root; else a note."""
+    out = _run(["bash", "-c", "lsblk -dn -o NAME,SIZE,TYPE | grep disk"])
+    drives = []
+    for line in out.splitlines():
+        parts = line.split()
+        if parts:
+            drives.append({"device": parts[0], "size": parts[1] if len(parts) > 1 else ""})
+    return {"drives": drives, "note": "Deep SMART health needs admin rights; use a fix guide to check manually."}
+
+
+def get_boot_time_analysis() -> dict:
+    """What took longest during the last boot (systemd-analyze blame, top 8)."""
+    total = _run(["bash", "-c", "systemd-analyze 2>/dev/null | head -1"]).strip()
+    blame = _run(["bash", "-c", "systemd-analyze blame 2>/dev/null | head -8"])
+    items = [ln.strip() for ln in blame.splitlines() if ln.strip()]
+    return {"total": total, "slowest_services": items}
+
+
+def get_recent_installs() -> dict:
+    """Recently installed/upgraded packages (from dpkg log)."""
+    out = _run(["bash", "-c", "grep -h ' install \\| upgrade ' /var/log/dpkg.log 2>/dev/null | tail -12"])
+    items = []
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 4:
+            items.append({"date": parts[0], "action": parts[2], "package": parts[3]})
+    return {"recent": items, "count": len(items)}
+
+
+def get_app_count() -> dict:
+    """How many apps/processes are currently running."""
+    return {"process_count": len(psutil.pids())}

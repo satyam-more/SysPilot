@@ -220,3 +220,77 @@ def confirm_and_apply(pending_id: str) -> dict:
 def clear_pending() -> None:
     """Testing helper — drop all staged proposals."""
     _pending.clear()
+
+
+# ---------------------------------------------------------------------------
+# Staged file write (create / edit) — always approval-gated
+# ---------------------------------------------------------------------------
+
+import os as _os
+from pathlib import Path as _Path
+
+_pending_writes: dict[str, dict] = {}
+
+# Only allow writes inside the user's home dir — never system paths.
+_WRITE_ROOT = _Path.home()
+
+
+def _write_allowed(path: str) -> bool:
+    try:
+        resolved = _Path(_os.path.expanduser(path)).resolve()
+        return str(resolved).startswith(str(_WRITE_ROOT.resolve()))
+    except Exception:
+        return False
+
+
+def propose_file_write(path: str, content: str, mode: str = "create") -> dict:
+    """
+    Stage a file create/overwrite/append for user approval. Returns a
+    pending_id. The write only happens on confirm_file_write(). Restricted to
+    the user's home directory for safety.
+    """
+    full = _os.path.expanduser(path)
+    if not _write_allowed(full):
+        return {"status": "error", "message": "For safety, files can only be written inside your home folder."}
+    if mode not in ("create", "overwrite", "append"):
+        mode = "create"
+    pid = secrets.token_hex(8)
+    _pending_writes[pid] = {"path": full, "content": content, "mode": mode, "created": time.monotonic()}
+    exists = _os.path.exists(full)
+    return {
+        "status": "pending_write",
+        "pending_id": pid,
+        "path": full,
+        "mode": mode,
+        "exists": exists,
+        "preview": content[:500],
+        "message": f"I'll {'update' if exists else 'create'} {full}. Review and approve.",
+    }
+
+
+def confirm_file_write(pending_id: str) -> dict:
+    """Perform a previously staged file write, only if the id matches."""
+    entry = _pending_writes.pop(pending_id, None)
+    if entry is None:
+        return {"status": "error", "message": "No matching pending file write (expired or already used)."}
+    if time.monotonic() - entry["created"] > _PROPOSAL_TTL:
+        return {"status": "error", "message": "This file write expired. Request it again."}
+    path, content, mode = entry["path"], entry["content"], entry["mode"]
+    if not _write_allowed(path):
+        return {"status": "error", "message": "Blocked: path is outside your home folder."}
+    try:
+        _Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if mode == "append":
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(content)
+        else:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+        return {"status": "ok", "path": path, "mode": mode,
+                "message": f"Saved {path} ({'appended' if mode == 'append' else 'written'})."}
+    except OSError as exc:
+        return {"status": "error", "message": f"Could not write file: {exc}"}
+
+
+def clear_pending_writes() -> None:
+    _pending_writes.clear()
