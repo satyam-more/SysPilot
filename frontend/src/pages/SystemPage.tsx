@@ -71,70 +71,84 @@ export default function SystemPage() {
 
   const cancel = (turnId: number) => update(turnId, { pending: null });
 
+  const SUGGESTIONS = [
+    "Is my computer healthy?",
+    "What's slowing down my computer?",
+    "Which apps can I safely close?",
+    "How do I free up space?",
+  ];
+
+  const ask = (q: string) => {
+    setQuestion(q);
+    setTimeout(() => submit(), 0);
+  };
+
   return (
-    <div className="ask-page">
-      {turns.length === 0 && (
-        <div className="ask-empty">
-          <h2>System Health Assistant</h2>
-          <p>
-            Ask about your computer: "what's using my memory?", "what starts at
-            boot?", "which apps are safe to close?", or "how do I free up disk
-            space?". Any command that changes your system is shown for your
-            approval before it runs.
-          </p>
+    <div className="chat">
+      {turns.length === 0 ? (
+        <div className="welcome">
+          <div className="welcome-icon">🩺</div>
+          <h2>How can I help with your computer?</h2>
+          <p>Ask in plain words — I'll check your system and explain it simply. Nothing changes without your approval.</p>
+          <div className="suggestions">
+            {SUGGESTIONS.map((s) => (
+              <button key={s} className="suggestion-chip" onClick={() => ask(s)}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="chat-thread">
+          {turns.map((turn) => (
+            <div key={turn.id} className="chat-turn">
+              <div className="msg msg-user">
+                <div className="msg-bubble">{turn.question}</div>
+                <div className="msg-avatar user">You</div>
+              </div>
+
+              <div className="msg msg-assistant">
+                <div className="msg-avatar bot">🩺</div>
+                <div className="msg-content">
+                  {turn.loading && (
+                    <div className="msg-bubble bot">
+                      <span className="spinner" /> Checking your system…
+                    </div>
+                  )}
+                  {turn.error && <div className="msg-bubble bot error-text">{turn.error}</div>}
+                  {turn.answer && (
+                    <div className="msg-bubble bot markdown">
+                      <Markdown remarkPlugins={[remarkGfm]}>{turn.answer}</Markdown>
+                    </div>
+                  )}
+                  {turn.pending && (
+                    <ConfirmationGate
+                      pending={turn.pending}
+                      busy={busy}
+                      onConfirm={() => confirm(turn.id, turn.pending!)}
+                      onCancel={() => cancel(turn.id)}
+                    />
+                  )}
+                  {turn.confirmResult && <CommandResult result={turn.confirmResult} />}
+                </div>
+              </div>
+            </div>
+          ))}
+          <div ref={bottomRef} />
         </div>
       )}
 
-      <div className="ask-thread">
-        {turns.map((turn) => (
-          <div key={turn.id} className="ask-turn">
-            <div className="ask-question">
-              <span className="ask-label">You</span>
-              <p>{turn.question}</p>
-            </div>
-            <div className="ask-answer">
-              <span className="ask-label">Assistant</span>
-              {turn.loading && (
-                <p className="ask-loading"><span className="spinner" /> Checking your system…</p>
-              )}
-              {turn.error && <p className="ask-error">{turn.error}</p>}
-              {turn.answer && (
-                <div className="ask-answer-text markdown">
-                  <Markdown remarkPlugins={[remarkGfm]}>{turn.answer}</Markdown>
-                </div>
-              )}
-
-              {turn.tools.length > 0 && (
-                <div className="ask-evidence">
-                  <div className="ask-evidence-header">Tools used</div>
-                  {turn.tools.map((t, i) => (
-                    <div key={i} className="ask-evidence-item">
-                      <span className="src-tag src-filesystem">{t}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {turn.pending && <ConfirmationGate pending={turn.pending} busy={busy} onConfirm={() => confirm(turn.id, turn.pending!)} onCancel={() => cancel(turn.id)} />}
-
-              {turn.confirmResult && <CommandResult result={turn.confirmResult} />}
-            </div>
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-
-      <div className="ask-input-bar">
+      <div className="composer">
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-          placeholder="Ask about your system… (Enter to send)"
-          rows={2}
+          placeholder="Ask about your computer…"
+          rows={1}
           disabled={busy}
         />
-        <button className="btn-primary" onClick={submit} disabled={busy || !question.trim()}>
-          {busy ? "…" : "Ask"}
+        <button className="composer-send" onClick={submit} disabled={busy || !question.trim()} aria-label="Send">
+          {busy ? "…" : "↑"}
         </button>
       </div>
     </div>
@@ -144,19 +158,19 @@ export default function SystemPage() {
 function ConfirmationGate({ pending, busy, onConfirm, onCancel }: {
   pending: PendingAction; busy: boolean; onConfirm: () => void; onCancel: () => void;
 }) {
-  const risky = pending.classification === "approval_required";
   return (
-    <div className={`notice ${risky ? "warning" : "success"}`} style={{ marginTop: 14 }}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>
-        {risky ? "Confirmation required" : "Ready to run"}
+    <div className="action-card" style={{ marginTop: 12 }}>
+      <div className="action-head">
+        <span className="action-icon">⚡</span>
+        <span>Needs your OK to continue</span>
       </div>
-      <p style={{ marginBottom: 8 }}>{pending.message}</p>
-      <code style={{ display: "block", background: "var(--bg)", padding: "8px 12px", borderRadius: 6, marginBottom: 10, fontFamily: "var(--mono)", wordBreak: "break-all" }}>
-        {pending.command}
-      </code>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn-primary" disabled={busy} onClick={onConfirm}>Run it</button>
-        <button className="btn-secondary" disabled={busy} onClick={onCancel}>Cancel</button>
+      <details className="action-cmd">
+        <summary>View the exact command</summary>
+        <code>{pending.command}</code>
+      </details>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button className="btn-primary" disabled={busy} onClick={onConfirm}>Allow</button>
+        <button className="btn-secondary" disabled={busy} onClick={onCancel}>Not now</button>
       </div>
     </div>
   );

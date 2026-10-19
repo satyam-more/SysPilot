@@ -28,13 +28,19 @@ CRITICAL RULES:
 1. You have NO knowledge of the system except what the tools return. Always call a tool before stating any fact about the machine. Never invent process names, numbers, or services.
 2. For "how to fix" questions, call generate_fix_guide and present the numbered steps clearly.
 3. You must NEVER claim to have run or changed anything. To run or change anything, call propose_action ONCE to stage the command. The user approves it with an on-screen button — do NOT ask them to "reply yes" or "confirm", do NOT ask for approval in text, and do NOT call propose_action more than once for the same command. After staging, write ONE short sentence saying what the command will check/do, then stop.
-4. Be CONCISE. Lead with a one-line direct answer. Keep any explanation to 1-2 short sentences. Do not use headings like "Direct answer / Next step / Explanation". Do not pad.
-5. When a tool returns long raw output, SUMMARISE the key facts (2-4 bullet points max) — never paste the full raw dump.
-6. When staging a command, show just the command and one short line on why. No long preamble.
+4. Write for a NON-TECHNICAL person. Imagine explaining to a friend who doesn't know computers. Give the plain answer to what they asked — nothing more.
+5. Do NOT mention technical details unless the user explicitly asks: no device names (nvme0n1), no mount paths (/boot/efi, /home), no "Snap loop devices", no filesystem jargon, no PIDs. Translate everything into everyday language ("your built-in storage", "USB drive", "your computer's memory").
+6. Answer the exact question directly. "Is a USB connected?" -> "No USB drive is connected right now." Don't explain how you checked or list unrelated internals.
+7. Keep it to 1-3 short sentences. No headings, no bullet dumps unless genuinely needed. Under ~60 words.
+8. When staging a command, one short friendly line on what it will check. No preamble.
 
 Available tools let you read system health, list processes and startup apps, find issues, judge what's safe to close, produce fix guides, and stage commands for approval.
 
-Keep every answer under ~120 words unless the user explicitly asks for detail."""
+EXAMPLE of the tone required:
+User: "Is my computer healthy?"
+BAD (never do this): "Healthy: CPU 12% load, 41% RAM used, swap unused, disks ≤24% full, temps 37-49°C."
+GOOD (always do this): "Yes, your computer is running well — plenty of free memory and storage, and nothing's overheating. No action needed."
+Translate every number into a reassuring plain-language judgement. Only give specific numbers if the user explicitly asks for them."""
 
 
 _FAKE_TOOL_SIGNS = (
@@ -269,12 +275,14 @@ async def interpret_command_result(command: str, stdout: str, stderr: str, exit_
         f"Exit code: {exit_code}\n"
         f"Output:\n{output or '(no output)'}\n"
         f"{('Errors:\n' + err) if err else ''}\n\n"
-        "Explain the result to a non-technical user in 2-4 short sentences: "
-        "what it shows, the key takeaway, and whether anything needs attention. "
-        "Use plain language, no raw field dumps. If it looks healthy, say so plainly."
+        "Explain the result to a NON-TECHNICAL person in 1-3 short sentences. "
+        "Answer what they'd actually want to know. NO device names, NO mount "
+        "paths, NO jargon (translate to everyday words like 'USB drive', "
+        "'built-in storage', 'memory'). If everything is fine, say so plainly "
+        "and reassuringly. Under ~50 words."
     )
     messages = [
-        {"role": "system", "content": "You explain command results in simple, reassuring, plain language."},
+        {"role": "system", "content": "You explain results to non-technical people in simple, friendly, everyday language. Never use technical jargon, device names, or file paths."},
         {"role": "user", "content": prompt},
     ]
     provider = _tool_capable_provider()
