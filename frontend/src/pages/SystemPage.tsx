@@ -180,7 +180,23 @@ function ConfirmationGate({ pending, busy, onConfirm, onCancel }: {
 function CommandResult({ result }: { result: ConfirmResponse }) {
   // Command needs to be run by the user in their own terminal (e.g. sudo).
   if (result.status === "run_in_terminal") {
-    const copy = () => navigator.clipboard?.writeText(result.command ?? "");
+    // Use a textarea + execCommand fallback: navigator.clipboard triggers a
+    // Qt permission request that crashes the pywebview desktop window.
+    const copy = () => {
+      const cmd = result.command ?? "";
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = cmd;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        /* no-op */
+      }
+    };
     return (
       <div className="notice warning" style={{ marginTop: 14 }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}>Run this in your terminal</div>
