@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 MAX_ITERATIONS = 6
 RETRY_LIMIT = 2
 
-SYSTEM_PROMPT_TEMPLATE = """You are TrailBack, a personal AI memory assistant.
+SYSTEM_PROMPT_TEMPLATE = """You are SysPilot, a personal AI memory assistant.
 You have access to the user's recent activity log — files they edited, commands they ran, and documents they worked on.
 
 CRITICAL RULE — READ FIRST:

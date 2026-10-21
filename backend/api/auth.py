@@ -11,7 +11,7 @@ Two completely separate mechanisms — do not mix them:
    - Revoked when the backend process exits (in-memory only)
 
 2. Shell collector token
-   - Written to ~/.config/trailback/shell_token on startup (mode 0600)
+   - Written to ~/.config/syspilot/shell_token on startup (mode 0600)
    - Read by the shell hook before each POST
    - Validated by validate_shell_request() — no Origin requirement
    - Revoked by deleting the file or restarting the backend
@@ -60,7 +60,7 @@ _SESSION_TOKEN: str = secrets.token_hex(32)
 # ---------------------------------------------------------------------------
 # Shell token — file-backed, written on startup
 # ---------------------------------------------------------------------------
-_SHELL_TOKEN_PATH = Path.home() / ".config" / "trailback" / "shell_token"
+_SHELL_TOKEN_PATH = Path.home() / ".config" / "syspilot" / "shell_token"
 _shell_token: str | None = None
 
 

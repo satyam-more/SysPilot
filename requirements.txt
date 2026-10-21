@@ -1,4 +1,4 @@
-# TrailBack — pinned production dependencies
+# SysPilot — pinned production dependencies
 # Generated: 2026-10-17 | Python 3.14.4
 
 # Web framework

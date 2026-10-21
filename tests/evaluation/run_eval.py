@@ -151,7 +151,7 @@ def main() -> None:
     from backend.harness.providers import provider_registry
 
     db_mod._conn = None
-    db_mod.init_db()  # opens the real ~/.config/trailback DB
+    db_mod.init_db()  # opens the real ~/.config/syspilot DB
     provider_registry._load_config()
     saved_provider = provider_registry._api_config.get("provider", "openai")
     saved_model = provider_registry._api_config.get("model", "")

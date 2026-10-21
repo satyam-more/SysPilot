@@ -1,5 +1,5 @@
 """
-TrailBack desktop launcher.
+SysPilot desktop launcher.
 
 Starts the FastAPI backend on a loopback port in a background thread,
 waits for it to become healthy, then opens a native desktop window
@@ -26,7 +26,7 @@ import webview
 from backend.main import app
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("trailback.desktop")
+logger = logging.getLogger("syspilot.desktop")
 
 HOST = "127.0.0.1"
 
@@ -67,7 +67,7 @@ def _wait_for_health(port: int, timeout: float = 15.0) -> bool:
 
 def main() -> None:
     port = _find_free_port()
-    logger.info("Starting TrailBack backend on %s:%d", HOST, port)
+    logger.info("Starting SysPilot backend on %s:%d", HOST, port)
 
     # Register the WebView's own origin so same-origin requests from the
     # desktop window pass the Origin allowlist check.
@@ -87,7 +87,7 @@ def main() -> None:
     logger.info("Backend ready. Opening desktop window.")
 
     webview.create_window(
-        title="TrailBack",
+        title="SysPilot",
         url=f"http://{HOST}:{port}/",
         width=1100,
         height=760,

@@ -1,5 +1,5 @@
 /**
- * TrailBack API client.
+ * SysPilot API client.
  *
  * Session token is read from the <meta name="tb-session"> tag injected by
  * the backend into the served HTML. It is never stored in localStorage
@@ -38,7 +38,7 @@ async function ensureDevToken(): Promise<void> {
     SESSION_TOKEN = resp.data.token;
   } catch {
     console.warn(
-      "TrailBack: could not fetch dev session token. Is the backend running?"
+      "SysPilot: could not fetch dev session token. Is the backend running?"
     );
   }
 }
@@ -76,7 +76,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 403) {
-      window.dispatchEvent(new CustomEvent("trailback:session-expired"));
+      window.dispatchEvent(new CustomEvent("syspilot:session-expired"));
     }
     return Promise.reject(error);
   }

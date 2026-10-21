@@ -10,7 +10,7 @@ import keyring
 import keyring.errors
 import logging
 
-_SERVICE_NAME = "trailback"
+_SERVICE_NAME = "syspilot"
 _session_store: dict[str, str] = {}  # in-memory fallback only
 
 logger = logging.getLogger(__name__)

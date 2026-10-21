@@ -10,8 +10,8 @@ export default function App() {
 
   useEffect(() => {
     const handler = () => setSessionExpired(true);
-    window.addEventListener("trailback:session-expired", handler);
-    return () => window.removeEventListener("trailback:session-expired", handler);
+    window.addEventListener("syspilot:session-expired", handler);
+    return () => window.removeEventListener("syspilot:session-expired", handler);
   }, []);
 
   return (
@@ -23,7 +23,7 @@ export default function App() {
       )}
 
       <div className="navbar">
-        <h1>System Health Assistant</h1>
+        <h1>SysPilot</h1>
         <nav>
           <a className={page === "system" ? "active" : ""} onClick={() => setPage("system")}>
             Assistant

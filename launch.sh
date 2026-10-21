@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# TrailBack launcher.
+# SysPilot launcher.
 # Double-click this (or run ./launch.sh) to start the desktop app.
 #
 # It will:
@@ -17,7 +17,7 @@ cd "$SCRIPT_DIR"
 VENV_PY="$SCRIPT_DIR/.venv/bin/python"
 VENV_PIP="$SCRIPT_DIR/.venv/bin/pip"
 
-echo "=== TrailBack launcher ==="
+echo "=== SysPilot launcher ==="
 
 # 1. Virtualenv check -------------------------------------------------------
 if [ ! -x "$VENV_PY" ]; then
@@ -40,5 +40,5 @@ if [ ! -f "$SCRIPT_DIR/frontend/dist/index.html" ]; then
 fi
 
 # 3. Launch the desktop app -------------------------------------------------
-echo "Starting TrailBack..."
+echo "Starting SysPilot..."
 exec "$VENV_PY" desktop.py

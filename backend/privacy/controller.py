@@ -21,7 +21,7 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-_PRIVACY_FILE = Path.home() / ".config" / "trailback" / "privacy_active"
+_PRIVACY_FILE = Path.home() / ".config" / "syspilot" / "privacy_active"
 
 
 class PrivacyController:

@@ -96,7 +96,7 @@ export default function AskPage() {
           <h2>Ask about your activity</h2>
           <p>
             Ask questions like "What was I working on yesterday?" or "Where did
-            I leave off in my Rust project?" TrailBack searches your recorded
+            I leave off in my Rust project?" SysPilot searches your recorded
             activity and answers with evidence.
           </p>
         </div>
@@ -111,7 +111,7 @@ export default function AskPage() {
             </div>
 
             <div className="ask-answer">
-              <span className="ask-label">TrailBack</span>
+              <span className="ask-label">SysPilot</span>
               {turn.loading && (
                 <p className="ask-loading">
                   <span className="spinner" /> Searching your activity…

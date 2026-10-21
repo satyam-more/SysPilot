@@ -1,5 +1,5 @@
 """
-TrailBack backend — FastAPI application entry point.
+SysPilot backend — FastAPI application entry point.
 
 Run with:
     source .venv/bin/activate
@@ -52,10 +52,10 @@ async def lifespan(app: FastAPI):
     init_auth()
     token = get_session_token()
     logger.info("Session token generated (in-memory only).")
-    logger.info("Shell token written to ~/.config/trailback/shell_token")
+    logger.info("Shell token written to ~/.config/syspilot/shell_token")
     # Print token to console for development — in production this would be
     # injected into the served HTML via <meta name="tb-session">.
-    print(f"\n[TrailBack] Session token: {token}\n")
+    print(f"\n[SysPilot] Session token: {token}\n")
 
     # Register the filesystem collector with the privacy controller so it
     # halts on privacy activation, then start it (watches configured dirs).
@@ -87,11 +87,11 @@ async def lifespan(app: FastAPI):
     # Shutdown — stop collectors cleanly.
     filesystem_collector.stop()
     browser_collector.stop()
-    logger.info("TrailBack shutting down.")
+    logger.info("SysPilot shutting down.")
 
 
 app = FastAPI(
-    title="TrailBack",
+    title="SysPilot",
     description="Local AI memory assistant API",
     version="0.1.0",
     lifespan=lifespan,
@@ -135,7 +135,7 @@ def dev_token() -> dict:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "trailback"}
+    return {"status": "ok", "service": "syspilot"}
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +190,6 @@ else:
     @app.get("/")
     def root() -> dict:
         return {
-            "message": "TrailBack API is running. Frontend not built yet — "
+            "message": "SysPilot API is running. Frontend not built yet — "
             "run `npm run build` in frontend/. See /docs for endpoints."
         }

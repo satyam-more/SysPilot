@@ -1,7 +1,7 @@
 """
 SQLite database initialisation and connection management.
 
-Single file-based SQLite database at ~/.config/trailback/trailback.db
+Single file-based SQLite database at ~/.config/syspilot/syspilot.db
 All writes go through _transaction() in events.py for atomicity.
 """
 
@@ -11,8 +11,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_DB_DIR = Path.home() / ".config" / "trailback"
-_DB_PATH = _DB_DIR / "trailback.db"
+_DB_DIR = Path.home() / ".config" / "syspilot"
+_DB_PATH = _DB_DIR / "syspilot.db"
 
 # Module-level connection (one per process — SQLite is single-writer).
 _conn: sqlite3.Connection | None = None
