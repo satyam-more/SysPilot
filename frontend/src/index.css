@@ -644,3 +644,179 @@ input:focus, select:focus {
   font-size: 12.5px;
   word-break: break-all;
 }
+
+/* ===========================================================================
+   ChatGPT-style layout: sidebar + main chat
+   =========================================================================== */
+.app-shell {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.cgpt-layout {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+}
+
+/* Sidebar */
+.cgpt-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: #0b0d11;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+}
+
+.cgpt-newchat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+.cgpt-newchat:hover { background: var(--surface-hover); }
+.cgpt-plus { font-size: 18px; line-height: 1; }
+
+.cgpt-session-list {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cgpt-session {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  transition: background 0.12s;
+}
+.cgpt-session:hover { background: var(--surface); color: var(--text); }
+.cgpt-session.active { background: var(--surface-hover); color: var(--text); }
+.cgpt-session-icon { font-size: 13px; flex-shrink: 0; opacity: 0.8; }
+.cgpt-session-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cgpt-session-del {
+  background: transparent;
+  padding: 2px 4px;
+  font-size: 12px;
+  opacity: 0;
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+.cgpt-session:hover .cgpt-session-del { opacity: 0.6; }
+.cgpt-session-del:hover { opacity: 1 !important; background: rgba(229, 72, 77, 0.15); }
+
+.cgpt-sidebar-foot {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 8px;
+}
+.cgpt-settings-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  text-align: left;
+}
+.cgpt-settings-btn:hover { background: var(--surface); color: var(--text); }
+.cgpt-brand {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.5;
+  padding: 8px 0 4px;
+  letter-spacing: 0.5px;
+}
+
+/* Main chat column fills remaining width, content centered like ChatGPT */
+.cgpt-layout .chat {
+  flex: 1;
+  height: 100vh;
+  max-width: none;
+  margin: 0;
+  padding: 16px 16px 20px;
+  align-items: center;
+}
+.cgpt-layout .chat .welcome,
+.cgpt-layout .chat .chat-thread,
+.cgpt-layout .chat .composer {
+  width: 100%;
+  max-width: 760px;
+}
+.cgpt-layout .chat .welcome { margin: auto; }
+
+/* Settings shell (reachable from the sidebar) */
+.settings-shell {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  height: 100vh;
+  overflow-y: auto;
+}
+.settings-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.settings-topbar h1 { font-size: 18px; font-weight: 600; }
+
+/* Mobile: collapse sidebar to a slim strip */
+@media (max-width: 720px) {
+  .cgpt-sidebar { width: 64px; padding: 8px 6px; }
+  .cgpt-newchat { justify-content: center; padding: 10px; }
+  .cgpt-newchat span:not(.cgpt-plus) { display: none; }
+  .cgpt-session-title, .cgpt-session-del, .cgpt-settings-btn span:last-child, .cgpt-brand { display: none; }
+}
+
+/* Voice mode (Alexa+ simulation) */
+.composer-mic {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.composer-mic:hover { background: var(--surface-hover); color: var(--text); }
+.composer-mic.on {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: #6366f1;
+  color: #a5b4fc;
+}
+.composer.voice-on {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px #6366f1;
+}

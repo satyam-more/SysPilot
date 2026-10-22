@@ -15,27 +15,25 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app">
+    <div className="app-shell">
       {sessionExpired && (
         <div className="session-banner">
           Session expired — restart the backend to reconnect.
         </div>
       )}
 
-      <div className="navbar">
-        <h1>SysPilot</h1>
-        <nav>
-          <a className={page === "system" ? "active" : ""} onClick={() => setPage("system")}>
-            Assistant
-          </a>
-          <a className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}>
-            Settings
-          </a>
-        </nav>
-      </div>
-
-      {page === "system" && <SystemPage />}
-      {page === "settings" && <SettingsPage />}
+      {page === "system" && <SystemPage onOpenSettings={() => setPage("settings")} />}
+      {page === "settings" && (
+        <div className="settings-shell">
+          <div className="settings-topbar">
+            <button className="btn-secondary" onClick={() => setPage("system")}>
+              ← Back to chat
+            </button>
+            <h1>Settings</h1>
+          </div>
+          <SettingsPage />
+        </div>
+      )}
     </div>
   );
 }

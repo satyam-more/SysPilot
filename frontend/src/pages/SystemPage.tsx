@@ -15,24 +15,128 @@ interface Turn {
   loading: boolean;
 }
 
-export default function SystemPage() {
+interface Session {
+  id: string;
+  title: string;
+  createdAt: number;
+  turns: Turn[];
+}
+
+const SESSIONS_KEY = "syspilot:sessions";
+const ACTIVE_KEY = "syspilot:active-session";
+
+const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+function makeSession(): Session {
+  return { id: newId(), title: "New chat", createdAt: Date.now(), turns: [] };
+}
+
+// Load saved sessions from localStorage. Transient per-turn fields (loading,
+// pending actions) aren't meaningful across reloads, so reset them.
+function loadSessions(): Session[] {
+  try {
+    const raw = localStorage.getItem(SESSIONS_KEY);
+    if (!raw) return [];
+    const saved = JSON.parse(raw) as Session[];
+    if (!Array.isArray(saved)) return [];
+    return saved.map((s) => ({
+      ...s,
+      turns: (s.turns ?? []).map((t) => ({ ...t, loading: false, pending: null })),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export default function SystemPage({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const [question, setQuestion] = useState("");
-  const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  // Voice mode simulates the Alexa+ experience: answers come back short and
+  // spoken-style (no tables), the way they'd be read aloud by a voice assistant.
+  const [voiceMode, setVoiceMode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // --- Multi-session (ChatGPT-style) state ---------------------------------
+  const [sessions, setSessions] = useState<Session[]>(() => {
+    const loaded = loadSessions();
+    return loaded.length ? loaded : [makeSession()];
+  });
+  const [activeId, setActiveId] = useState<string>(() => {
+    const saved = localStorage.getItem(ACTIVE_KEY);
+    const loaded = loadSessions();
+    if (saved && loaded.some((s) => s.id === saved)) return saved;
+    return loaded[0]?.id ?? "";
+  });
+
+  // Ensure activeId always points at an existing session.
+  const active = sessions.find((s) => s.id === activeId) ?? sessions[0];
+  const turns = active?.turns ?? [];
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns]);
 
+  // Persist sessions + active selection so chats survive reloads/restarts.
+  useEffect(() => {
+    try {
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    } catch {
+      /* storage full or unavailable — non-fatal */
+    }
+  }, [sessions]);
+
+  useEffect(() => {
+    if (activeId) localStorage.setItem(ACTIVE_KEY, activeId);
+  }, [activeId]);
+
+  // Patch the turns of the active session.
+  const setTurns = (updater: (prev: Turn[]) => Turn[]) =>
+    setSessions((prev) =>
+      prev.map((s) => (s.id === active.id ? { ...s, turns: updater(s.turns) } : s))
+    );
+
   const update = (id: number, patch: Partial<Turn>) =>
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+
+  // --- Session management ---------------------------------------------------
+  const newChat = () => {
+    // Reuse an existing empty session if the current one is already blank.
+    const empty = sessions.find((s) => s.turns.length === 0);
+    if (empty) {
+      setActiveId(empty.id);
+    } else {
+      const s = makeSession();
+      setSessions((prev) => [s, ...prev]);
+      setActiveId(s.id);
+    }
+    setQuestion("");
+  };
+
+  const selectChat = (id: string) => {
+    if (busy) return;
+    setActiveId(id);
+  };
+
+  const deleteChat = (id: string) => {
+    setSessions((prev) => {
+      const remaining = prev.filter((s) => s.id !== id);
+      const next = remaining.length ? remaining : [makeSession()];
+      if (id === activeId) setActiveId(next[0].id);
+      return next;
+    });
+  };
 
   const submit = async () => {
     const q = question.trim();
     if (!q || busy) return;
     const id = Date.now();
+    const isFirst = turns.length === 0;
     setTurns((p) => [...p, { id, question: q, answer: null, tools: [], pending: null, confirmResult: null, error: null, loading: true }]);
+    // Title the chat from its first question (ChatGPT-style).
+    if (isFirst) {
+      const title = q.length > 40 ? q.slice(0, 40).trimEnd() + "…" : q;
+      setSessions((prev) => prev.map((s) => (s.id === active.id ? { ...s, title } : s)));
+    }
     setQuestion("");
     setBusy(true);
     // Build conversation history from completed turns so the agent has context.
@@ -42,8 +146,13 @@ export default function SystemPage() {
         { role: "user" as const, content: t.question },
         { role: "assistant" as const, content: t.answer as string },
       ]);
+    // In voice mode, ask the agent to respond the way Alexa+ would speak it:
+    // a couple of short sentences, plain spoken language, no tables or markdown.
+    const sent = voiceMode
+      ? `${q}\n\n(Respond as a voice assistant would speak aloud: 2-3 short sentences, plain spoken language, no tables, lists, or markdown.)`
+      : q;
     try {
-      const r = await sysAPI.ask(q, history);
+      const r = await sysAPI.ask(sent, history);
       update(id, {
         answer: r.data.answer,
         tools: r.data.tool_calls.map((t) => t.tool),
@@ -85,7 +194,39 @@ export default function SystemPage() {
   };
 
   return (
-    <div className="chat">
+    <div className="cgpt-layout">
+      <aside className="cgpt-sidebar">
+        <button className="cgpt-newchat" onClick={newChat}>
+          <span className="cgpt-plus">+</span> New chat
+        </button>
+        <div className="cgpt-session-list">
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              className={`cgpt-session ${s.id === active?.id ? "active" : ""}`}
+              onClick={() => selectChat(s.id)}
+            >
+              <span className="cgpt-session-icon">💬</span>
+              <span className="cgpt-session-title">{s.title}</span>
+              <button
+                className="cgpt-session-del"
+                title="Delete chat"
+                onClick={(e) => { e.stopPropagation(); deleteChat(s.id); }}
+              >
+                🗑
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="cgpt-sidebar-foot">
+          <button className="cgpt-settings-btn" onClick={onOpenSettings}>
+            <span>⚙</span> Settings
+          </button>
+          <div className="cgpt-brand">SysPilot</div>
+        </div>
+      </aside>
+
+      <div className="chat">
       {turns.length === 0 ? (
         <div className="welcome">
           <div className="welcome-icon">🩺</div>
@@ -139,18 +280,28 @@ export default function SystemPage() {
         </div>
       )}
 
-      <div className="composer">
+      <div className={`composer ${voiceMode ? "voice-on" : ""}`}>
+        <button
+          className={`composer-mic ${voiceMode ? "on" : ""}`}
+          onClick={() => setVoiceMode((v) => !v)}
+          title={voiceMode ? "Voice mode on (Alexa+ style answers)" : "Turn on voice mode (Alexa+ style)"}
+          aria-pressed={voiceMode}
+          aria-label="Toggle voice mode"
+        >
+          🎙
+        </button>
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-          placeholder="Ask about your computer…"
+          placeholder={voiceMode ? "Ask Alexa+ about your computer…" : "Ask about your computer…"}
           rows={1}
           disabled={busy}
         />
         <button className="composer-send" onClick={submit} disabled={busy || !question.trim()} aria-label="Send">
           {busy ? "…" : "↑"}
         </button>
+      </div>
       </div>
     </div>
   );
