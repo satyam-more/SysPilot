@@ -51,9 +51,6 @@ function loadSessions(): Session[] {
 export default function SystemPage({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
-  // Voice mode simulates the Alexa+ experience: answers come back short and
-  // spoken-style (no tables), the way they'd be read aloud by a voice assistant.
-  const [voiceMode, setVoiceMode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // --- Multi-session (ChatGPT-style) state ---------------------------------
@@ -146,13 +143,8 @@ export default function SystemPage({ onOpenSettings }: { onOpenSettings?: () => 
         { role: "user" as const, content: t.question },
         { role: "assistant" as const, content: t.answer as string },
       ]);
-    // In voice mode, ask the agent to respond the way Alexa+ would speak it:
-    // a couple of short sentences, plain spoken language, no tables or markdown.
-    const sent = voiceMode
-      ? `${q}\n\n(Respond as a voice assistant would speak aloud: 2-3 short sentences, plain spoken language, no tables, lists, or markdown.)`
-      : q;
     try {
-      const r = await sysAPI.ask(sent, history);
+      const r = await sysAPI.ask(q, history);
       update(id, {
         answer: r.data.answer,
         tools: r.data.tool_calls.map((t) => t.tool),
@@ -280,21 +272,12 @@ export default function SystemPage({ onOpenSettings }: { onOpenSettings?: () => 
         </div>
       )}
 
-      <div className={`composer ${voiceMode ? "voice-on" : ""}`}>
-        <button
-          className={`composer-mic ${voiceMode ? "on" : ""}`}
-          onClick={() => setVoiceMode((v) => !v)}
-          title={voiceMode ? "Voice mode on (Alexa+ style answers)" : "Turn on voice mode (Alexa+ style)"}
-          aria-pressed={voiceMode}
-          aria-label="Toggle voice mode"
-        >
-          🎙
-        </button>
+      <div className="composer">
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-          placeholder={voiceMode ? "Ask Alexa+ about your computer…" : "Ask about your computer…"}
+          placeholder="Ask about your computer…"
           rows={1}
           disabled={busy}
         />

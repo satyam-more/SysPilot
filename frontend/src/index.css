@@ -795,28 +795,3 @@ input:focus, select:focus {
   .cgpt-newchat span:not(.cgpt-plus) { display: none; }
   .cgpt-session-title, .cgpt-session-del, .cgpt-settings-btn span:last-child, .cgpt-brand { display: none; }
 }
-
-/* Voice mode (Alexa+ simulation) */
-.composer-mic {
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.composer-mic:hover { background: var(--surface-hover); color: var(--text); }
-.composer-mic.on {
-  background: rgba(99, 102, 241, 0.18);
-  border-color: #6366f1;
-  color: #a5b4fc;
-}
-.composer.voice-on {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 1px #6366f1;
-}
